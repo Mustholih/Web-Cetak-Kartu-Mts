@@ -22,7 +22,8 @@ interface MatchedPhotoItem {
   matchedStudentId: string | null;
   matchedStudentName: string | null;
   matchedStudentNis: string | null;
-  matchType: 'NIS' | 'NAMA' | 'MANUAL' | 'NONE';
+  matchedStudentNisn: string | null;
+  matchType: 'NISN' | 'NAMA' | 'MANUAL' | 'NONE';
   isApplied: boolean;
 }
 
@@ -36,7 +37,7 @@ export const UploadFotoMassalView: React.FC<Props> = ({ students, onApplyPhotos 
   const [filterTab, setFilterTab] = useState<'ALL' | 'MATCHED' | 'UNMATCHED'>('ALL');
   const [successNotice, setSuccessNotice] = useState<string | null>(null);
 
-  // Match photo against student list based on NIS or Name
+  // Match photo against student list based on NISN (utama) or Name
   const matchPhoto = (
     fileName: string,
     file: File,
@@ -46,52 +47,66 @@ export const UploadFotoMassalView: React.FC<Props> = ({ students, onApplyPhotos 
     const baseName = fileName.replace(/\.[^/.]+$/, '').trim();
     const cleanNumbers = baseName.replace(/[^0-9]/g, '');
 
-    // 1. Try match by NIS (e.g. "2607001.jpg" or "foto_2607001.png")
+    // 1. UTAMA: Cocokkan berdasarkan NISN siswa (misal: "0112345678.jpg")
     if (cleanNumbers) {
-      const matchByNis = students.find(
-        (s) => s.nis === cleanNumbers || cleanNumbers.includes(s.nis) || s.nis.includes(cleanNumbers)
-      );
-      if (matchByNis) {
+      const matchByNisn = students.find((s) => {
+        if (!s.nisn) return false;
+        const studentNisnClean = s.nisn.replace(/[^0-9]/g, '');
+        if (!studentNisnClean) return false;
+        return (
+          studentNisnClean === cleanNumbers ||
+          cleanNumbers.includes(studentNisnClean) ||
+          studentNisnClean.includes(cleanNumbers)
+        );
+      });
+
+      if (matchByNisn) {
         return {
           id: `photo-${Date.now()}-${Math.random()}`,
           file,
           fileName,
           dataUrl,
-          matchedStudentId: matchByNis.id,
-          matchedStudentName: matchByNis.nama,
-          matchedStudentNis: matchByNis.nis,
-          matchType: 'NIS',
+          matchedStudentId: matchByNisn.id,
+          matchedStudentName: matchByNisn.nama,
+          matchedStudentNis: matchByNisn.nis,
+          matchedStudentNisn: matchByNisn.nisn,
+          matchType: 'NISN',
           isApplied: false,
         };
       }
     }
 
-    // 2. Try match by Name (e.g. "ahmad_faizin.jpg")
+    // 2. CADANGAN: Cocokkan berdasarkan Nama siswa (misal: "ahmad_faizin.jpg")
     const normalizedBase = baseName.toLowerCase().replace(/[^a-z0-9]/g, '');
-    const matchByName = students.find((s) => {
-      const normName = s.nama.toLowerCase().replace(/[^a-z0-9]/g, '');
-      return (
-        normName.includes(normalizedBase) ||
-        normalizedBase.includes(normName) ||
-        (normName.length > 5 && normalizedBase.length > 5 && normName.slice(0, 8) === normalizedBase.slice(0, 8))
-      );
-    });
+    if (normalizedBase.length >= 3) {
+      const matchByName = students.find((s) => {
+        const normName = s.nama.toLowerCase().replace(/[^a-z0-9]/g, '');
+        return (
+          normName.includes(normalizedBase) ||
+          normalizedBase.includes(normName) ||
+          (normName.length > 5 &&
+            normalizedBase.length > 5 &&
+            normName.slice(0, 8) === normalizedBase.slice(0, 8))
+        );
+      });
 
-    if (matchByName) {
-      return {
-        id: `photo-${Date.now()}-${Math.random()}`,
-        file,
-        fileName,
-        dataUrl,
-        matchedStudentId: matchByName.id,
-        matchedStudentName: matchByName.nama,
-        matchedStudentNis: matchByName.nis,
-        matchType: 'NAMA',
-        isApplied: false,
-      };
+      if (matchByName) {
+        return {
+          id: `photo-${Date.now()}-${Math.random()}`,
+          file,
+          fileName,
+          dataUrl,
+          matchedStudentId: matchByName.id,
+          matchedStudentName: matchByName.nama,
+          matchedStudentNis: matchByName.nis,
+          matchedStudentNisn: matchByName.nisn,
+          matchType: 'NAMA',
+          isApplied: false,
+        };
+      }
     }
 
-    // No automatic match found
+    // Tidak ditemukan pencocokan otomatis
     return {
       id: `photo-${Date.now()}-${Math.random()}`,
       file,
@@ -100,6 +115,7 @@ export const UploadFotoMassalView: React.FC<Props> = ({ students, onApplyPhotos 
       matchedStudentId: null,
       matchedStudentName: null,
       matchedStudentNis: null,
+      matchedStudentNisn: null,
       matchType: 'NONE',
       isApplied: false,
     };
@@ -136,6 +152,7 @@ export const UploadFotoMassalView: React.FC<Props> = ({ students, onApplyPhotos 
             matchedStudentId: student ? student.id : null,
             matchedStudentName: student ? student.nama : null,
             matchedStudentNis: student ? student.nis : null,
+            matchedStudentNisn: student ? student.nisn : null,
             matchType: student ? 'MANUAL' : 'NONE',
           };
         }
@@ -193,13 +210,17 @@ export const UploadFotoMassalView: React.FC<Props> = ({ students, onApplyPhotos 
         <div>
           <h2 className="text-base font-extrabold text-slate-900 flex items-center gap-2">
             <span>Upload Foto Siswa Massal</span>
-            <span className="px-2.5 py-0.5 rounded-full bg-amber-100 text-amber-900 text-xs font-bold">
-              Auto Match NIS
+            <span className="px-2.5 py-0.5 rounded-full bg-emerald-100 text-emerald-800 text-xs font-bold">
+              Auto Match NISN
             </span>
           </h2>
           <p className="text-xs text-slate-500 mt-1 max-w-2xl leading-relaxed">
             Upload puluhan atau ratusan foto siswa sekaligus. Sistem secara otomatis mencocokkan foto
-            dengan data siswa berdasarkan nama file (NIS). Contoh: <code className="bg-slate-100 px-1 py-0.5 rounded text-emerald-800 font-mono">2607001.jpg</code>.
+            dengan data siswa berdasarkan nomor <strong>NISN</strong> pada nama file. Contoh:{' '}
+            <code className="bg-slate-100 px-1 py-0.5 rounded text-emerald-800 font-mono">
+              0112345678.jpg
+            </code>
+            .
           </p>
         </div>
 
@@ -262,7 +283,10 @@ export const UploadFotoMassalView: React.FC<Props> = ({ students, onApplyPhotos 
           </p>
           <div className="mt-3 inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-slate-100 text-[11px] text-slate-600 font-medium">
             <FolderOpen className="w-3.5 h-3.5 text-amber-600" />
-            <span>Tip: Beri nama file foto dengan NIS siswa (misal: 2607001.jpg)</span>
+            <span>
+              Tip: Beri nama file foto dengan <strong>NISN</strong> siswa (misal:{' '}
+              <span className="font-mono font-bold text-emerald-800">0112345678.jpg</span>)
+            </span>
           </div>
         </label>
       </div>
@@ -362,7 +386,10 @@ export const UploadFotoMassalView: React.FC<Props> = ({ students, onApplyPhotos 
                         <p className="text-[11px] font-bold text-emerald-950 truncate">
                           {item.matchedStudentName}
                         </p>
-                        <p className="text-[10px] text-emerald-800 font-mono">
+                        <p className="text-[10px] text-emerald-900 font-mono font-bold">
+                          NISN: {item.matchedStudentNisn || '-'}
+                        </p>
+                        <p className="text-[9.5px] text-emerald-700 font-mono">
                           NIS: {item.matchedStudentNis}
                         </p>
                       </div>
@@ -379,7 +406,7 @@ export const UploadFotoMassalView: React.FC<Props> = ({ students, onApplyPhotos 
                           <option value="">-- Pasangkan dengan Siswa --</option>
                           {students.map((s) => (
                             <option key={s.id} value={s.id}>
-                              {s.nis} - {s.nama} ({s.kelas})
+                              {s.nisn ? `NISN: ${s.nisn}` : `NIS: ${s.nis}`} - {s.nama} ({s.kelas})
                             </option>
                           ))}
                         </select>

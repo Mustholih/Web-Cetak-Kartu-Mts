@@ -139,7 +139,7 @@ export const DashboardView: React.FC<Props> = ({
             <h3 className="text-xs font-bold text-slate-800 group-hover:text-emerald-700">
               Upload Foto Massal
             </h3>
-            <p className="text-[11px] text-slate-500">Cocokkan otomatis NIS</p>
+            <p className="text-[11px] text-slate-500">Cocokkan otomatis NISN</p>
           </div>
         </button>
 
@@ -295,7 +295,7 @@ export const DashboardView: React.FC<Props> = ({
                 Ada {countNoPhoto} siswa yang belum memiliki foto
               </p>
               <p className="text-[11px] text-amber-700">
-                Gunakan menu Upload Foto Massal untuk memasukkan foto secara bersamaan berdasarkan NIS.
+                Gunakan menu Upload Foto Massal untuk memasukkan foto secara bersamaan berdasarkan NISN.
               </p>
             </div>
           </div>

@@ -109,10 +109,14 @@ export const StorageService = {
     return count;
   },
 
-  updatePhotoForStudent(nisOrId: string, photoDataUrl: string): boolean {
+  updatePhotoForStudent(nisnNisOrId: string, photoDataUrl: string): boolean {
     const students = this.getStudents();
+    const cleanQuery = nisnNisOrId.trim();
     const target = students.find(
-      (s) => s.nis.trim() === nisOrId.trim() || s.id === nisOrId.trim()
+      (s) =>
+        (s.nisn && s.nisn.trim() === cleanQuery) ||
+        s.nis.trim() === cleanQuery ||
+        s.id === cleanQuery
     );
     if (target) {
       target.fotoUrl = photoDataUrl;
