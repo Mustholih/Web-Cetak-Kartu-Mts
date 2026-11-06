@@ -9,6 +9,7 @@ import {
   ExamRoom,
   ExamAllocation,
   ExamScheduleItem,
+  Teacher,
 } from './types';
 import { StorageService } from './services/storage';
 import { Sidebar } from './components/navigation/Sidebar';
@@ -20,6 +21,7 @@ import { DesainKartuPerpusView } from './components/views/DesainKartuPerpusView'
 import { DesainKartuSiswaView } from './components/views/DesainKartuSiswaView';
 import { CetakKartuView } from './components/views/CetakKartuView';
 import { ManajemenUjianView } from './components/views/ManajemenUjianView';
+import { DataGuruView } from './components/views/DataGuruView';
 import { TahunPelajaranView } from './components/views/TahunPelajaranView';
 import { BackupDataView } from './components/views/BackupDataView';
 import { ImportExcelModal } from './components/modals/ImportExcelModal';
@@ -47,6 +49,9 @@ export default function App() {
     StorageService.getAcademicYears()
   );
   const [adminPin, setAdminPin] = useState<string>(StorageService.getAdminPin());
+
+  // Teachers & Supervisors state
+  const [teachers, setTeachers] = useState<Teacher[]>(StorageService.getTeachers());
 
   // Exam Management state
   const [examInfo, setExamInfo] = useState<ExamInfo>(StorageService.getExamInfo());
@@ -199,6 +204,12 @@ export default function App() {
     showToast('Jadwal ujian berhasil disimpan!');
   };
 
+  const handleSaveTeachers = (newTeachers: Teacher[]) => {
+    StorageService.saveTeachers(newTeachers);
+    setTeachers(newTeachers);
+    showToast('Data guru berhasil disimpan!');
+  };
+
   // Mass Promotion
   const handlePromoteStudents = () => {
     const current = [...students];
@@ -279,6 +290,7 @@ export default function App() {
     setExamRooms(StorageService.getExamRooms());
     setExamAllocations(StorageService.getExamAllocations());
     setExamSchedule(StorageService.getExamSchedule());
+    setTeachers(StorageService.getTeachers());
     showToast('Seluruh data berhasil disinkronisasi dari cadangan!');
   };
 
@@ -439,10 +451,22 @@ export default function App() {
                 examRooms={examRooms}
                 examAllocations={examAllocations}
                 examSchedule={examSchedule}
+                teachers={teachers}
                 onSaveExamInfo={handleSaveExamInfo}
                 onSaveExamRooms={handleSaveExamRooms}
                 onSaveExamAllocations={handleSaveExamAllocations}
                 onSaveExamSchedule={handleSaveExamSchedule}
+                onSaveTeachers={handleSaveTeachers}
+              />
+            )}
+
+            {activeTab === 'data-guru' && (
+              <DataGuruView
+                teachers={teachers}
+                examSchedule={examSchedule}
+                onSaveTeachers={handleSaveTeachers}
+                onNavigateToSchedule={() => setActiveTab('manajemen-ujian')}
+                setActiveTab={setActiveTab}
               />
             )}
 

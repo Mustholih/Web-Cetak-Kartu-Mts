@@ -8,6 +8,7 @@ import {
   ExamRoom,
   ExamAllocation,
   ExamScheduleItem,
+  Teacher,
 } from '../types';
 import {
   DEFAULT_SCHOOL_IDENTITY,
@@ -17,6 +18,7 @@ import {
   DEFAULT_EXAM_INFO,
   DEFAULT_EXAM_ROOMS,
   DEFAULT_EXAM_SCHEDULE,
+  DEFAULT_TEACHERS,
 } from './defaultData';
 
 const KEYS = {
@@ -31,6 +33,7 @@ const KEYS = {
   EXAM_ROOMS: 'mts_miftahul_huda_exam_rooms_v1',
   EXAM_ALLOCATIONS: 'mts_miftahul_huda_exam_allocations_v1',
   EXAM_SCHEDULE: 'mts_miftahul_huda_exam_schedule_v1',
+  TEACHERS: 'mts_miftahul_huda_teachers_v1',
 };
 
 export const StorageService = {
@@ -290,6 +293,78 @@ export const StorageService = {
     localStorage.setItem(KEYS.EXAM_SCHEDULE, JSON.stringify(schedule));
   },
 
+  getTeachers(): Teacher[] {
+    try {
+      const data = localStorage.getItem(KEYS.TEACHERS);
+      if (!data) {
+        this.saveTeachers(DEFAULT_TEACHERS);
+        return DEFAULT_TEACHERS;
+      }
+      return JSON.parse(data);
+    } catch (e) {
+      return DEFAULT_TEACHERS;
+    }
+  },
+
+  saveTeachers(teachers: Teacher[]): void {
+    localStorage.setItem(KEYS.TEACHERS, JSON.stringify(teachers));
+  },
+
+  addTeacher(teacher: Omit<Teacher, 'id'>): { success: boolean; message: string; teacher?: Teacher } {
+    const teachers = this.getTeachers();
+    const cleanInisial = (teacher.inisial || '').trim().toUpperCase();
+    if (!cleanInisial) {
+      return { success: false, message: 'Inisial guru tidak boleh kosong!' };
+    }
+    const exists = teachers.some((t) => t.inisial.trim().toUpperCase() === cleanInisial);
+    if (exists) {
+      return { success: false, message: `Inisial "${cleanInisial}" sudah digunakan oleh guru lain!` };
+    }
+
+    const newTeacher: Teacher = {
+      ...teacher,
+      inisial: cleanInisial,
+      id: `t-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+    };
+
+    teachers.push(newTeacher);
+    this.saveTeachers(teachers);
+    return { success: true, message: 'Data guru berhasil ditambahkan.', teacher: newTeacher };
+  },
+
+  updateTeacher(teacher: Teacher): { success: boolean; message: string } {
+    const teachers = this.getTeachers();
+    const cleanInisial = (teacher.inisial || '').trim().toUpperCase();
+    const existsOther = teachers.some(
+      (t) => t.id !== teacher.id && t.inisial.trim().toUpperCase() === cleanInisial
+    );
+    if (existsOther) {
+      return { success: false, message: `Inisial "${cleanInisial}" sudah digunakan oleh guru lain!` };
+    }
+
+    const index = teachers.findIndex((t) => t.id === teacher.id);
+    if (index === -1) {
+      return { success: false, message: 'Data guru tidak ditemukan.' };
+    }
+
+    teachers[index] = {
+      ...teacher,
+      inisial: cleanInisial,
+    };
+    this.saveTeachers(teachers);
+    return { success: true, message: 'Data guru berhasil diperbarui.' };
+  },
+
+  deleteTeacher(id: string): boolean {
+    const teachers = this.getTeachers();
+    const filtered = teachers.filter((t) => t.id !== id);
+    if (filtered.length !== teachers.length) {
+      this.saveTeachers(filtered);
+      return true;
+    }
+    return false;
+  },
+
   // Intelligent Automatic Student Room & Desk Distribution
   autoAllocateStudents(
     students: Student[],
@@ -404,6 +479,7 @@ export const StorageService = {
       examRooms: this.getExamRooms(),
       examAllocations: this.getExamAllocations(),
       examSchedule: this.getExamSchedule(),
+      teachers: this.getTeachers(),
     };
     return JSON.stringify(backup, null, 2);
   },
@@ -423,11 +499,12 @@ export const StorageService = {
       if (parsed.examRooms) this.saveExamRooms(parsed.examRooms);
       if (parsed.examAllocations) this.saveExamAllocations(parsed.examAllocations);
       if (parsed.examSchedule) this.saveExamSchedule(parsed.examSchedule);
+      if (parsed.teachers) this.saveTeachers(parsed.teachers);
 
       return {
         success: true,
         count: parsed.students.length,
-        message: `Berhasil memulihkan ${parsed.students.length} data siswa, konfigurasi madrasah, dan manajemen ruang ujian!`,
+        message: `Berhasil memulihkan ${parsed.students.length} data siswa, guru & pengawas, serta manajemen ujian!`,
       };
     } catch (err: any) {
       return { success: false, message: `Gagal membaca file backup: ${err.message}` };
@@ -443,6 +520,7 @@ export const StorageService = {
     localStorage.removeItem(KEYS.EXAM_ROOMS);
     localStorage.removeItem(KEYS.EXAM_ALLOCATIONS);
     localStorage.removeItem(KEYS.EXAM_SCHEDULE);
+    localStorage.removeItem(KEYS.TEACHERS);
     this.saveStudents(DEFAULT_STUDENTS);
     this.saveSchoolIdentity(DEFAULT_SCHOOL_IDENTITY);
     this.saveLibraryConfig(DEFAULT_LIBRARY_CARD_CONFIG);
@@ -450,6 +528,7 @@ export const StorageService = {
     this.saveExamInfo(DEFAULT_EXAM_INFO);
     this.saveExamRooms(DEFAULT_EXAM_ROOMS);
     this.saveExamSchedule(DEFAULT_EXAM_SCHEDULE);
+    this.saveTeachers(DEFAULT_TEACHERS);
     const initial = this.autoAllocateStudents(
       DEFAULT_STUDENTS,
       DEFAULT_EXAM_ROOMS,

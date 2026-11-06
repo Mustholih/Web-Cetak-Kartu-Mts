@@ -10,6 +10,7 @@ import {
   CalendarDays,
   DatabaseBackup,
   Award,
+  UserCheck,
 } from 'lucide-react';
 import { ActiveTab, SchoolIdentity } from '../../types';
 
@@ -69,6 +70,12 @@ export const Sidebar: React.FC<Props> = ({
       label: 'Manajemen Ujian',
       icon: <Award className="w-5 h-5" />,
       badge: 'Baru',
+    },
+    {
+      id: 'data-guru',
+      label: 'Data Guru / Pengawas',
+      icon: <UserCheck className="w-5 h-5" />,
+      badge: 'Guru',
     },
     {
       id: 'tahun-pelajaran',

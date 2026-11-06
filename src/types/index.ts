@@ -104,6 +104,15 @@ export interface BatchPhotoMatch {
   status: 'matched' | 'unmatched' | 'applied';
 }
 
+export interface Teacher {
+  id: string;
+  nama: string; // e.g. "Dra. Hj. Siti Aminah, M.Pd."
+  nip?: string; // e.g. "197203151998032001" or "-"
+  inisial: string; // e.g. "SA" (uppercase 2-4 chars)
+  mataPelajaran?: string; // e.g. "Al-Qur'an Hadis"
+  noHp?: string;
+}
+
 export interface ExamInfo {
   namaUjian: string;
   subNamaUjian: string;
@@ -111,6 +120,9 @@ export interface ExamInfo {
   semester: string;
   tanggalUjian: string;
   nomorPesertaPrefix: string; // e.g. "02-15-023-"
+  tempatTanggalJadwal?: string; // e.g. "Tabir Selatan, 25 November 2026"
+  ketuaPanitiaNama?: string; // e.g. "H. AHMAD RIFA'I, S.Pd.I."
+  ketuaPanitiaNip?: string; // e.g. "198402122009011015"
 }
 
 export interface ExamRoom {
@@ -134,9 +146,11 @@ export interface ExamAllocation {
 }
 
 export interface ExamScheduleItem {
+  id?: string;
   hariTanggal: string;
   jam: string;
   mataPelajaran: string;
+  roomSupervisors?: Record<string, string>; // roomId -> teacher initial(s), e.g. { "room-01": "SA", "room-02": "RH" }
 }
 
 export type ActiveTab =
@@ -148,6 +162,7 @@ export type ActiveTab =
   | 'desain-siswa'
   | 'cetak-kartu'
   | 'manajemen-ujian'
+  | 'data-guru'
   | 'tahun-pelajaran'
   | 'backup-data';
 

@@ -26,6 +26,11 @@ import {
   Search,
   BookOpen,
   ClipboardList,
+  CalendarDays,
+  UserCheck,
+  Check,
+  RotateCcw,
+  FileText,
 } from 'lucide-react';
 import {
   Student,
@@ -34,10 +39,13 @@ import {
   ExamRoom,
   ExamAllocation,
   ExamScheduleItem,
+  Teacher,
 } from '../../types';
 import { ExamCardItem } from '../cards/ExamCardItem';
 import { ExamRoomLayoutPrint } from '../exam/ExamRoomLayoutPrint';
 import { ExamAttendancePrint } from '../exam/ExamAttendancePrint';
+import { ExamSchedulePrint } from '../exam/ExamSchedulePrint';
+import { DataGuruView } from './DataGuruView';
 import { PrintService } from '../../services/printService';
 import { StorageService } from '../../services/storage';
 
@@ -48,10 +56,13 @@ interface Props {
   examRooms: ExamRoom[];
   examAllocations: ExamAllocation[];
   examSchedule: ExamScheduleItem[];
+  teachers: Teacher[];
   onSaveExamInfo: (info: ExamInfo) => void;
   onSaveExamRooms: (rooms: ExamRoom[]) => void;
   onSaveExamAllocations: (allocations: ExamAllocation[]) => void;
   onSaveExamSchedule: (schedule: ExamScheduleItem[]) => void;
+  onSaveTeachers: (teachers: Teacher[]) => void;
+  initialSubTab?: 'ruang' | 'kartu' | 'denah' | 'absensi' | 'guru' | 'jadwal' | 'pengaturan';
 }
 
 export const ManajemenUjianView: React.FC<Props> = ({
@@ -61,13 +72,18 @@ export const ManajemenUjianView: React.FC<Props> = ({
   examRooms,
   examAllocations,
   examSchedule,
+  teachers,
   onSaveExamInfo,
   onSaveExamRooms,
   onSaveExamAllocations,
   onSaveExamSchedule,
+  onSaveTeachers,
+  initialSubTab = 'ruang',
 }) => {
-  // Sub-tabs: 'ruang' | 'kartu' | 'denah' | 'absensi' | 'pengaturan'
-  const [subTab, setSubTab] = useState<'ruang' | 'kartu' | 'denah' | 'absensi' | 'pengaturan'>('ruang');
+  // Sub-tabs: 'ruang' | 'kartu' | 'denah' | 'absensi' | 'guru' | 'jadwal' | 'pengaturan'
+  const [subTab, setSubTab] = useState<'ruang' | 'kartu' | 'denah' | 'absensi' | 'guru' | 'jadwal' | 'pengaturan'>(
+    initialSubTab || 'ruang'
+  );
   const [activeRoomId, setActiveRoomId] = useState<string>(examRooms[0]?.id || '');
   const [toastNotice, setToastNotice] = useState<string | null>(null);
   const [isExporting, setIsExporting] = useState<boolean>(false);
@@ -79,6 +95,8 @@ export const ManajemenUjianView: React.FC<Props> = ({
   const [isMoveStudentModalOpen, setIsMoveStudentModalOpen] = useState(false);
   const [movingStudentAllocation, setMovingStudentAllocation] = useState<ExamAllocation | null>(null);
   const [selectedTargetRoomId, setSelectedTargetRoomId] = useState<string>('');
+  const [isScheduleSignModalOpen, setIsScheduleSignModalOpen] = useState(false);
+  const [isAddScheduleModalOpen, setIsAddScheduleModalOpen] = useState(false);
 
   // Auto-allocate modal settings
   const [autoMode, setAutoMode] = useState<'by_class' | 'cross_class' | 'alphabetical' | 'by_nis'>('cross_class');
@@ -117,9 +135,23 @@ export const ManajemenUjianView: React.FC<Props> = ({
     pengawas2: '',
   });
 
+  // Schedule forms
+  const [scheduleItemForm, setScheduleItemForm] = useState({
+    hariTanggal: 'Senin, 01 Des 2026',
+    jam: '07.30 - 09.30',
+    mataPelajaran: '',
+  });
+
+  const [panitiaFormData, setPanitiaFormData] = useState({
+    ketuaPanitiaNama: examInfo.ketuaPanitiaNama || 'H. AHMAD RIFA\'I, S.Pd.I.',
+    ketuaPanitiaNip: examInfo.ketuaPanitiaNip || '198402122009011015',
+    tempatTanggalJadwal: examInfo.tempatTanggalJadwal || `${identity.kotaPenerbitan || 'Tabir Selatan'}, 25 November 2026`,
+  });
+
   const printCardsContainerRef = useRef<HTMLDivElement>(null);
   const printDenahContainerRef = useRef<HTMLDivElement>(null);
   const printAttendanceContainerRef = useRef<HTMLDivElement>(null);
+  const printScheduleContainerRef = useRef<HTMLDivElement>(null);
 
   const showNotification = (msg: string) => {
     setToastNotice(msg);
@@ -442,6 +474,98 @@ export const ManajemenUjianView: React.FC<Props> = ({
     }
   };
 
+  // Assign Supervisor Initial to Room in Schedule
+  const handleAssignSupervisor = (scheduleIdx: number, roomId: string, initial: string) => {
+    const updated = [...examSchedule];
+    const item = { ...updated[scheduleIdx] };
+    const roomSupervisors = { ...(item.roomSupervisors || {}) };
+    if (initial && initial.trim() !== '') {
+      roomSupervisors[roomId] = initial.trim().toUpperCase();
+    } else {
+      delete roomSupervisors[roomId];
+    }
+    item.roomSupervisors = roomSupervisors;
+    updated[scheduleIdx] = item;
+    onSaveExamSchedule(updated);
+  };
+
+  // Auto Assign Supervisors across all rooms in rotating order
+  const handleAutoAssignSupervisors = () => {
+    if (teachers.length === 0) {
+      alert('Tambahkan data guru pengawas terlebih dahulu di tab Data Guru.');
+      return;
+    }
+    let teacherIdx = 0;
+    const updated = examSchedule.map((item) => {
+      const roomSupervisors: Record<string, string> = { ...(item.roomSupervisors || {}) };
+      examRooms.forEach((r) => {
+        const t = teachers[teacherIdx % teachers.length];
+        roomSupervisors[r.id] = t.inisial;
+        teacherIdx++;
+      });
+      return {
+        ...item,
+        roomSupervisors,
+      };
+    });
+    onSaveExamSchedule(updated);
+    showNotification('Inisial pengawas berhasil dibagikan otomatis ke seluruh ruang!');
+  };
+
+  // Download Exam Schedule PDF
+  const handleDownloadSchedulePdf = async () => {
+    if (!printScheduleContainerRef.current) return;
+    setIsExporting(true);
+    setToastNotice('Sedang membuat file PDF Jadwal Ujian & Pengawas Ruang...');
+    try {
+      const safeTitle = `JADWAL_UJIAN_${examInfo.namaUjian.replace(/[^a-zA-Z0-9]/g, '_')}_MTS_MIFTAHUL_HUDA`;
+      await PrintService.downloadA4SheetPdf(printScheduleContainerRef.current, safeTitle);
+      setToastNotice('File PDF Jadwal Ujian berhasil diunduh!');
+      setTimeout(() => setToastNotice(null), 3500);
+    } catch (err: any) {
+      alert('Gagal membuat PDF: ' + err.message);
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
+  // Save Panitia and Signatures Configuration
+  const handleSavePanitiaInfo = () => {
+    const updated = {
+      ...examInfo,
+      ketuaPanitiaNama: panitiaFormData.ketuaPanitiaNama.trim(),
+      ketuaPanitiaNip: panitiaFormData.ketuaPanitiaNip.trim(),
+      tempatTanggalJadwal: panitiaFormData.tempatTanggalJadwal.trim(),
+    };
+    onSaveExamInfo(updated);
+    setIsScheduleSignModalOpen(false);
+    showNotification('Pengaturan panitia ujian & tanda tangan berhasil diperbarui!');
+  };
+
+  // Add Schedule Item
+  const handleAddScheduleItem = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!scheduleItemForm.mataPelajaran.trim()) {
+      alert('Nama mata pelajaran wajib diisi!');
+      return;
+    }
+    const newItem: ExamScheduleItem = {
+      id: `sch-${Date.now()}`,
+      hariTanggal: scheduleItemForm.hariTanggal.trim() || 'Senin, 01 Des 2026',
+      jam: scheduleItemForm.jam.trim() || '07.30 - 09.30',
+      mataPelajaran: scheduleItemForm.mataPelajaran.trim(),
+      roomSupervisors: {},
+    };
+    onSaveExamSchedule([...examSchedule, newItem]);
+    setIsAddScheduleModalOpen(false);
+    setScheduleItemForm({
+      hariTanggal: 'Senin, 01 Des 2026',
+      jam: '07.30 - 09.30',
+      mataPelajaran: '',
+    });
+    showNotification('Sesi mata pelajaran ujian baru berhasil ditambahkan!');
+  };
+
   return (
     <div className="space-y-6">
       {/* Toast Notification */}
@@ -484,7 +608,7 @@ export const ManajemenUjianView: React.FC<Props> = ({
       <div className="bg-white p-2 rounded-2xl border border-slate-200 shadow-xs flex flex-wrap gap-1.5 no-print">
         <button
           onClick={() => setSubTab('ruang')}
-          className={`px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-2 ${
+          className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
             subTab === 'ruang'
               ? 'bg-emerald-800 text-white shadow-sm'
               : 'text-slate-600 hover:bg-slate-100'
@@ -496,19 +620,19 @@ export const ManajemenUjianView: React.FC<Props> = ({
 
         <button
           onClick={() => setSubTab('kartu')}
-          className={`px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-2 ${
+          className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
             subTab === 'kartu'
               ? 'bg-emerald-800 text-white shadow-sm'
               : 'text-slate-600 hover:bg-slate-100'
           }`}
         >
           <Printer className="w-4 h-4" />
-          <span>2. Cetak Kartu Peserta Ujian</span>
+          <span>2. Cetak Kartu Peserta</span>
         </button>
 
         <button
           onClick={() => setSubTab('denah')}
-          className={`px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-2 ${
+          className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
             subTab === 'denah'
               ? 'bg-emerald-800 text-white shadow-sm'
               : 'text-slate-600 hover:bg-slate-100'
@@ -520,7 +644,7 @@ export const ManajemenUjianView: React.FC<Props> = ({
 
         <button
           onClick={() => setSubTab('absensi')}
-          className={`px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-2 ${
+          className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
             subTab === 'absensi'
               ? 'bg-emerald-800 text-white shadow-sm'
               : 'text-slate-600 hover:bg-slate-100'
@@ -531,15 +655,45 @@ export const ManajemenUjianView: React.FC<Props> = ({
         </button>
 
         <button
+          onClick={() => setSubTab('guru')}
+          className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+            subTab === 'guru'
+              ? 'bg-emerald-800 text-white shadow-sm'
+              : 'text-slate-600 hover:bg-slate-100'
+          }`}
+        >
+          <UserCheck className="w-4 h-4" />
+          <span>5. Data Guru / Pengawas</span>
+          <span className="text-[10px] bg-amber-400 text-emerald-950 font-bold px-1.5 py-0.2 rounded-full">
+            Inisial
+          </span>
+        </button>
+
+        <button
+          onClick={() => setSubTab('jadwal')}
+          className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+            subTab === 'jadwal'
+              ? 'bg-emerald-800 text-white shadow-sm'
+              : 'text-slate-600 hover:bg-slate-100'
+          }`}
+        >
+          <CalendarDays className="w-4 h-4" />
+          <span>6. Jadwal & Pengawas Ruang</span>
+          <span className="text-[10px] bg-amber-300 text-emerald-950 font-extrabold px-1.5 py-0.2 rounded-full">
+            Cetak
+          </span>
+        </button>
+
+        <button
           onClick={() => setSubTab('pengaturan')}
-          className={`px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-2 ${
+          className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
             subTab === 'pengaturan'
               ? 'bg-emerald-800 text-white shadow-sm'
               : 'text-slate-600 hover:bg-slate-100'
           }`}
         >
           <Sliders className="w-4 h-4" />
-          <span>5. Pengaturan & Jadwal Ujian</span>
+          <span>7. Pengaturan & Panitia</span>
         </button>
       </div>
 
@@ -1187,7 +1341,259 @@ export const ManajemenUjianView: React.FC<Props> = ({
       )}
 
       {/* ========================================================= */}
-      {/* SUB-TAB 5: PENGATURAN & JADWAL UJIAN */}
+      {/* SUB-TAB 5: DATA GURU & INISIAL PENGAWAS */}
+      {/* ========================================================= */}
+      {subTab === 'guru' && (
+        <DataGuruView
+          teachers={teachers}
+          examSchedule={examSchedule}
+          onSaveTeachers={onSaveTeachers}
+          onNavigateToSchedule={() => setSubTab('jadwal')}
+        />
+      )}
+
+      {/* ========================================================= */}
+      {/* SUB-TAB 6: JADWAL & PENGAWAS RUANG (CETAK JADWAL RESMI) */}
+      {/* ========================================================= */}
+      {subTab === 'jadwal' && (
+        <div className="space-y-6">
+          {/* Action Row */}
+          <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-3 bg-white p-4 sm:p-5 rounded-2xl border border-slate-200 shadow-xs no-print">
+            <div>
+              <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-emerald-100 text-emerald-900 text-xs font-bold mb-1">
+                <CalendarDays className="w-3.5 h-3.5 text-emerald-700" />
+                <span>Format Resmi Cetak A4</span>
+              </div>
+              <h2 className="text-sm sm:text-base font-bold text-slate-900">
+                Jadwal Ujian & Penugasan Pengawas Ruang
+              </h2>
+              <p className="text-xs text-slate-500">
+                Setiap ruang menampilkan inisial guru pengawas. Dokumen lengkap dengan Kop Madrasah resmi dan tanda tangan Kepala Madrasah (kiri bawah) serta Ketua Panitia Ujian (kanan bawah).
+              </p>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                onClick={handleAutoAssignSupervisors}
+                className="px-3.5 py-2 rounded-xl bg-amber-500 hover:bg-amber-600 text-emerald-950 font-bold text-xs flex items-center gap-1.5 shadow-xs cursor-pointer transition-all"
+                title="Bagikan inisial guru secara rotasi merata ke seluruh ruang"
+              >
+                <Shuffle className="w-4 h-4" />
+                <span>Bagi Pengawas Otomatis</span>
+              </button>
+
+              <button
+                onClick={() => {
+                  setPanitiaFormData({
+                    ketuaPanitiaNama: examInfo.ketuaPanitiaNama || 'H. AHMAD RIFA\'I, S.Pd.I.',
+                    ketuaPanitiaNip: examInfo.ketuaPanitiaNip || '198402122009011015',
+                    tempatTanggalJadwal: examInfo.tempatTanggalJadwal || `${identity.kotaPenerbitan || 'Tabir Selatan'}, 25 November 2026`,
+                  });
+                  setIsScheduleSignModalOpen(true);
+                }}
+                className="px-3.5 py-2 rounded-xl border border-slate-300 hover:bg-slate-50 text-slate-700 font-semibold text-xs flex items-center gap-1.5 cursor-pointer transition-all"
+              >
+                <Edit2 className="w-4 h-4 text-emerald-700" />
+                <span>Atur Panitia & TTD</span>
+              </button>
+
+              <button
+                onClick={() => setIsAddScheduleModalOpen(true)}
+                className="px-3.5 py-2 rounded-xl bg-emerald-700 hover:bg-emerald-800 text-white font-bold text-xs flex items-center gap-1.5 shadow-xs cursor-pointer transition-all"
+              >
+                <Plus className="w-4 h-4" />
+                <span>Tambah Sesi</span>
+              </button>
+
+              <button
+                onClick={() => window.print()}
+                className="px-4 py-2 rounded-xl border border-slate-300 hover:bg-slate-50 text-slate-700 font-bold text-xs flex items-center gap-1.5 cursor-pointer transition-all"
+              >
+                <Printer className="w-4 h-4" />
+                <span>Cetak Printer</span>
+              </button>
+
+              <button
+                disabled={isExporting}
+                onClick={handleDownloadSchedulePdf}
+                className="px-4 py-2 rounded-xl bg-gradient-to-r from-emerald-800 to-teal-800 hover:from-emerald-900 hover:to-teal-900 text-white font-bold text-xs flex items-center gap-1.5 shadow-md cursor-pointer disabled:opacity-50 transition-all"
+              >
+                <FileDown className="w-4 h-4 text-amber-300" />
+                <span>{isExporting ? 'Memproses PDF...' : 'Unduh PDF Jadwal'}</span>
+              </button>
+            </div>
+          </div>
+
+          {/* Interactive Supervisor Assignment Matrix */}
+          <div className="bg-white rounded-2xl border border-slate-200 shadow-xs overflow-hidden no-print">
+            <div className="p-4 bg-slate-50 border-b border-slate-200 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
+              <div>
+                <h3 className="text-xs font-bold uppercase tracking-wider text-slate-800 flex items-center gap-2">
+                  <Grid className="w-4 h-4 text-emerald-700" />
+                  <span>Matriks Penugasan Pengawas Ruang (Inisial Saja)</span>
+                </h3>
+                <p className="text-[11px] text-slate-500">
+                  Pilih inisial guru untuk masing-masing ruang. Pilihan langsung tersimpan dan otomatis muncul di lembar cetak jadwal.
+                </p>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="text-[11px] text-slate-500">Tersedia:</span>
+                <span className="font-bold text-emerald-800 text-xs">{teachers.length} Guru</span>
+                <span className="text-slate-300">•</span>
+                <span className="font-bold text-slate-700 text-xs">{examRooms.length} Ruang</span>
+              </div>
+            </div>
+
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-xs border-collapse">
+                <thead className="bg-slate-100 text-slate-700 font-bold border-b border-slate-200">
+                  <tr>
+                    <th className="py-2.5 px-3 w-10 text-center">No</th>
+                    <th className="py-2.5 px-3 w-40">Hari, Tanggal</th>
+                    <th className="py-2.5 px-3 w-28 text-center">Waktu</th>
+                    <th className="py-2.5 px-3">Mata Pelajaran</th>
+                    {examRooms.map((room) => (
+                      <th
+                        key={room.id}
+                        className="py-2.5 px-2 text-center min-w-[130px] bg-emerald-50/70 border-l border-slate-200"
+                      >
+                        <div className="text-emerald-950 font-black">{room.nomorRuang}</div>
+                        <div className="text-[10px] font-medium text-slate-500">{room.namaRuang}</div>
+                      </th>
+                    ))}
+                    <th className="py-2.5 px-2 text-center w-12">Hapus</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {examSchedule.map((item, sIdx) => (
+                    <tr key={item.id || sIdx} className="hover:bg-slate-50/80 transition-colors">
+                      <td className="py-2.5 px-3 text-center font-bold text-slate-500">
+                        {sIdx + 1}
+                      </td>
+                      <td className="py-2.5 px-3 font-medium text-slate-900 whitespace-nowrap">
+                        <input
+                          type="text"
+                          value={item.hariTanggal}
+                          onChange={(e) => {
+                            const updated = [...examSchedule];
+                            updated[sIdx].hariTanggal = e.target.value;
+                            onSaveExamSchedule(updated);
+                          }}
+                          className="w-full bg-transparent border-b border-transparent hover:border-slate-300 focus:border-emerald-600 text-xs py-0.5"
+                        />
+                      </td>
+                      <td className="py-2.5 px-3 text-center font-mono text-slate-700 whitespace-nowrap">
+                        <input
+                          type="text"
+                          value={item.jam}
+                          onChange={(e) => {
+                            const updated = [...examSchedule];
+                            updated[sIdx].jam = e.target.value;
+                            onSaveExamSchedule(updated);
+                          }}
+                          className="w-full text-center bg-transparent border-b border-transparent hover:border-slate-300 focus:border-emerald-600 text-xs py-0.5 font-mono"
+                        />
+                      </td>
+                      <td className="py-2.5 px-3 font-bold text-slate-900">
+                        <input
+                          type="text"
+                          value={item.mataPelajaran}
+                          onChange={(e) => {
+                            const updated = [...examSchedule];
+                            updated[sIdx].mataPelajaran = e.target.value;
+                            onSaveExamSchedule(updated);
+                          }}
+                          className="w-full bg-transparent border-b border-transparent hover:border-slate-300 focus:border-emerald-600 text-xs py-0.5 font-bold text-emerald-950"
+                        />
+                      </td>
+                      {examRooms.map((room) => {
+                        const currentInitial = item.roomSupervisors?.[room.id] || '';
+                        return (
+                          <td key={room.id} className="py-2 px-2 border-l border-slate-100 text-center">
+                            <select
+                              value={currentInitial}
+                              onChange={(e) => handleAssignSupervisor(sIdx, room.id, e.target.value)}
+                              className={`w-full text-xs font-bold py-1 px-1.5 rounded-lg border cursor-pointer transition-all ${
+                                currentInitial
+                                  ? 'bg-emerald-50 border-emerald-300 text-emerald-950 font-mono'
+                                  : 'bg-slate-50 border-slate-200 text-slate-400 font-normal'
+                              }`}
+                            >
+                              <option value="">- Kosong -</option>
+                              {teachers.map((t) => (
+                                <option key={t.id} value={t.inisial}>
+                                  [{t.inisial}] {t.nama}
+                                </option>
+                              ))}
+                            </select>
+                          </td>
+                        );
+                      })}
+                      <td className="py-2.5 px-2 text-center">
+                        <button
+                          onClick={() => {
+                            const updated = examSchedule.filter((_, i) => i !== sIdx);
+                            onSaveExamSchedule(updated);
+                            showNotification('Sesi ujian dihapus.');
+                          }}
+                          className="p-1 rounded text-slate-400 hover:text-rose-600 hover:bg-rose-50 cursor-pointer"
+                          title="Hapus Sesi"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          {/* Live Print Preview Section */}
+          <div className="bg-slate-200/80 p-4 sm:p-8 rounded-2xl border border-slate-300 flex flex-col items-center">
+            <div className="w-full max-w-4xl flex items-center justify-between mb-4 no-print">
+              <div>
+                <h3 className="text-sm font-bold text-slate-800">
+                  Pratinjau Lembar Cetak Jadwal Ujian & Pengawas
+                </h3>
+                <p className="text-xs text-slate-500">
+                  Format A4 standar siap cetak printer atau unduh PDF
+                </p>
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => window.print()}
+                  className="px-3.5 py-1.5 rounded-xl bg-white border border-slate-300 hover:bg-slate-50 text-slate-700 text-xs font-semibold flex items-center gap-1.5 cursor-pointer shadow-xs"
+                >
+                  <Printer className="w-3.5 h-3.5" />
+                  <span>Cetak Langsung</span>
+                </button>
+                <button
+                  disabled={isExporting}
+                  onClick={handleDownloadSchedulePdf}
+                  className="px-3.5 py-1.5 rounded-xl bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-bold flex items-center gap-1.5 cursor-pointer shadow-xs"
+                >
+                  <FileDown className="w-3.5 h-3.5 text-amber-300" />
+                  <span>Download PDF</span>
+                </button>
+              </div>
+            </div>
+
+            <div ref={printScheduleContainerRef} className="shadow-2xl overflow-hidden rounded-md bg-white">
+              <ExamSchedulePrint
+                identity={identity}
+                examInfo={examInfo}
+                examRooms={examRooms}
+                examSchedule={examSchedule}
+                teachers={teachers}
+              />
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================= */}
+      {/* SUB-TAB 7: PENGATURAN & PANITIA UJIAN */}
       {/* ========================================================= */}
       {subTab === 'pengaturan' && (
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
@@ -1253,6 +1659,54 @@ export const ManajemenUjianView: React.FC<Props> = ({
                 <p className="text-[10px] text-slate-400 mt-1">
                   Contoh: 02-15-023- (akan menghasilkan 02-15-023-001, 02-15-023-002, dst)
                 </p>
+              </div>
+
+              <div className="pt-3 border-t border-slate-200">
+                <h4 className="text-xs font-bold text-slate-800 mb-2 flex items-center gap-1.5">
+                  <Shield className="w-3.5 h-3.5 text-emerald-700" />
+                  <span>Penandatangan Jadwal & Panitia Ujian</span>
+                </h4>
+
+                <div className="space-y-3">
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 mb-1">
+                      Nama Ketua Panitia Ujian (Kanan Bawah)
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="contoh: H. AHMAD RIFA'I, S.Pd.I."
+                      value={examInfo.ketuaPanitiaNama || ''}
+                      onChange={(e) => onSaveExamInfo({ ...examInfo, ketuaPanitiaNama: e.target.value })}
+                      className="w-full px-3 py-2 text-xs rounded-xl border border-slate-300 font-medium"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 mb-1">
+                      NIP / NPK Ketua Panitia Ujian
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="198402122009011015 (opsional)"
+                      value={examInfo.ketuaPanitiaNip || ''}
+                      onChange={(e) => onSaveExamInfo({ ...examInfo, ketuaPanitiaNip: e.target.value })}
+                      className="w-full px-3 py-2 text-xs rounded-xl border border-slate-300 font-mono text-xs"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 mb-1">
+                      Tempat & Tanggal Dokumen Jadwal
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="contoh: Tabir Selatan, 25 November 2026"
+                      value={examInfo.tempatTanggalJadwal || ''}
+                      onChange={(e) => onSaveExamInfo({ ...examInfo, tempatTanggalJadwal: e.target.value })}
+                      className="w-full px-3 py-2 text-xs rounded-xl border border-slate-300 font-medium"
+                    />
+                  </div>
+                </div>
               </div>
             </div>
           </div>
@@ -1689,6 +2143,206 @@ export const ManajemenUjianView: React.FC<Props> = ({
                 <span>Pindahkan Siswa</span>
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================= */}
+      {/* MODAL: PENGATURAN TANDA TANGAN & PANITIA UJIAN */}
+      {/* ========================================================= */}
+      {isScheduleSignModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs animate-in fade-in">
+          <div className="bg-white w-full max-w-lg rounded-2xl shadow-2xl border border-slate-200 overflow-hidden">
+            <div className="px-6 py-4 bg-gradient-to-r from-emerald-900 to-emerald-800 text-white flex items-center justify-between">
+              <div>
+                <h3 className="text-sm font-bold">Pengaturan Tanda Tangan & Panitia Ujian</h3>
+                <p className="text-xs text-emerald-200">
+                  Untuk lembar cetak Jadwal Ujian & Pengawas Ruang MTs Miftahul Huda
+                </p>
+              </div>
+              <button
+                onClick={() => setIsScheduleSignModalOpen(false)}
+                className="text-slate-300 hover:text-white cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="p-6 space-y-4 text-xs">
+              <div className="p-3 rounded-xl bg-amber-50 border border-amber-200 text-amber-900">
+                <p className="font-bold">Format Penandatangan Dokumen:</p>
+                <div className="grid grid-cols-2 gap-3 mt-2 text-[11px]">
+                  <div>
+                    <span className="font-semibold text-slate-600">Sebelah Kiri Bawah:</span>
+                    <p className="font-bold text-slate-900">Kepala Madrasah</p>
+                    <p className="text-slate-500">{identity.kepalaMadrasah}</p>
+                  </div>
+                  <div>
+                    <span className="font-semibold text-slate-600">Sebelah Kanan Bawah:</span>
+                    <p className="font-bold text-slate-900">Ketua Panitia Ujian</p>
+                    <p className="text-slate-500">
+                      {panitiaFormData.ketuaPanitiaNama || '(Belum diatur)'}
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              <div>
+                <label className="block font-bold text-slate-800 mb-1">
+                  Nama Lengkap Ketua Panitia Ujian <span className="text-rose-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  required
+                  placeholder="contoh: H. AHMAD RIFA'I, S.Pd.I."
+                  value={panitiaFormData.ketuaPanitiaNama}
+                  onChange={(e) =>
+                    setPanitiaFormData({ ...panitiaFormData, ketuaPanitiaNama: e.target.value })
+                  }
+                  className="w-full px-3 py-2 rounded-xl border border-slate-300 focus:outline-none focus:border-emerald-600 font-medium"
+                />
+              </div>
+
+              <div>
+                <label className="block font-bold text-slate-800 mb-1">
+                  NIP / NPK Ketua Panitia Ujian
+                </label>
+                <input
+                  type="text"
+                  placeholder="198402122009011015 (opsional)"
+                  value={panitiaFormData.ketuaPanitiaNip}
+                  onChange={(e) =>
+                    setPanitiaFormData({ ...panitiaFormData, ketuaPanitiaNip: e.target.value })
+                  }
+                  className="w-full px-3 py-2 rounded-xl border border-slate-300 focus:outline-none focus:border-emerald-600 font-mono"
+                />
+              </div>
+
+              <div>
+                <label className="block font-bold text-slate-800 mb-1">
+                  Tempat & Tanggal Pengesahan Jadwal <span className="text-rose-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  required
+                  placeholder="contoh: Tabir Selatan, 25 November 2026"
+                  value={panitiaFormData.tempatTanggalJadwal}
+                  onChange={(e) =>
+                    setPanitiaFormData({ ...panitiaFormData, tempatTanggalJadwal: e.target.value })
+                  }
+                  className="w-full px-3 py-2 rounded-xl border border-slate-300 focus:outline-none focus:border-emerald-600 font-medium"
+                />
+              </div>
+            </div>
+
+            <div className="px-6 py-4 bg-slate-50 border-t flex justify-end gap-2.5 text-xs">
+              <button
+                type="button"
+                onClick={() => setIsScheduleSignModalOpen(false)}
+                className="px-4 py-2 rounded-xl border border-slate-300 text-slate-700 font-semibold cursor-pointer"
+              >
+                Batal
+              </button>
+              <button
+                type="button"
+                onClick={handleSavePanitiaInfo}
+                className="px-5 py-2 rounded-xl bg-emerald-700 hover:bg-emerald-800 text-white font-bold shadow-md cursor-pointer flex items-center gap-1.5"
+              >
+                <Check className="w-4 h-4" />
+                <span>Simpan Pengaturan</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================= */}
+      {/* MODAL: TAMBAH SESI MATA PELAJARAN UJIAN */}
+      {/* ========================================================= */}
+      {isAddScheduleModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs animate-in fade-in">
+          <div className="bg-white w-full max-w-md rounded-2xl shadow-2xl border border-slate-200 overflow-hidden">
+            <div className="px-6 py-4 bg-gradient-to-r from-emerald-900 to-emerald-800 text-white flex items-center justify-between">
+              <div>
+                <h3 className="text-sm font-bold">Tambah Sesi / Mapel Ujian Baru</h3>
+                <p className="text-xs text-emerald-200">
+                  Jadwal Asesmen MTs Miftahul Huda
+                </p>
+              </div>
+              <button
+                onClick={() => setIsAddScheduleModalOpen(false)}
+                className="text-slate-300 hover:text-white cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleAddScheduleItem} className="p-6 space-y-4 text-xs">
+              <div>
+                <label className="block font-bold text-slate-800 mb-1">
+                  Hari & Tanggal <span className="text-rose-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  required
+                  placeholder="contoh: Senin, 01 Des 2026"
+                  value={scheduleItemForm.hariTanggal}
+                  onChange={(e) =>
+                    setScheduleItemForm({ ...scheduleItemForm, hariTanggal: e.target.value })
+                  }
+                  className="w-full px-3 py-2 rounded-xl border border-slate-300 focus:outline-none focus:border-emerald-600 font-medium"
+                />
+              </div>
+
+              <div>
+                <label className="block font-bold text-slate-800 mb-1">
+                  Waktu Pelaksanaan / Sesi <span className="text-rose-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  required
+                  placeholder="contoh: 07.30 - 09.30"
+                  value={scheduleItemForm.jam}
+                  onChange={(e) =>
+                    setScheduleItemForm({ ...scheduleItemForm, jam: e.target.value })
+                  }
+                  className="w-full px-3 py-2 rounded-xl border border-slate-300 focus:outline-none focus:border-emerald-600 font-mono font-medium"
+                />
+              </div>
+
+              <div>
+                <label className="block font-bold text-slate-800 mb-1">
+                  Nama Mata Pelajaran <span className="text-rose-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  required
+                  placeholder="contoh: Al-Qur'an Hadis"
+                  value={scheduleItemForm.mataPelajaran}
+                  onChange={(e) =>
+                    setScheduleItemForm({ ...scheduleItemForm, mataPelajaran: e.target.value })
+                  }
+                  className="w-full px-3 py-2 rounded-xl border border-slate-300 focus:outline-none focus:border-emerald-600 font-bold text-slate-900"
+                />
+              </div>
+
+              <div className="pt-2 flex justify-end gap-2.5 border-t border-slate-200">
+                <button
+                  type="button"
+                  onClick={() => setIsAddScheduleModalOpen(false)}
+                  className="px-4 py-2 rounded-xl border border-slate-300 text-slate-700 font-semibold cursor-pointer"
+                >
+                  Batal
+                </button>
+                <button
+                  type="submit"
+                  className="px-5 py-2 rounded-xl bg-emerald-700 hover:bg-emerald-800 text-white font-bold shadow-md cursor-pointer flex items-center gap-1.5"
+                >
+                  <Plus className="w-4 h-4" />
+                  <span>Tambahkan Sesi</span>
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

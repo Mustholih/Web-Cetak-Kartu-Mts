@@ -6,6 +6,7 @@ import {
   ExamInfo,
   ExamRoom,
   ExamScheduleItem,
+  Teacher,
 } from '../types';
 
 // Authentic Madrasah Logo SVG as Base64 Data URL
@@ -345,7 +346,110 @@ export const DEFAULT_EXAM_INFO: ExamInfo = {
   semester: 'Ganjil',
   tanggalUjian: '01 - 08 Desember 2026',
   nomorPesertaPrefix: '02-15-023-',
+  tempatTanggalJadwal: 'Tabir Selatan, 25 November 2026',
+  ketuaPanitiaNama: 'H. AHMAD RIFA\'I, S.Pd.I.',
+  ketuaPanitiaNip: '198402122009011015',
 };
+
+// Default Teachers & Exam Supervisors with Initials
+export const DEFAULT_TEACHERS: Teacher[] = [
+  {
+    id: 't-01',
+    nama: 'Dra. Hj. Siti Aminah, M.Pd.',
+    nip: '197203151998032001',
+    inisial: 'SA',
+    mataPelajaran: 'Al-Qur\'an Hadis',
+    noHp: '081274561001',
+  },
+  {
+    id: 't-02',
+    nama: 'Ust. Muhammad Ilyas, S.Pd.I.',
+    nip: '198004122005011004',
+    inisial: 'MI',
+    mataPelajaran: 'Akidah Akhlak',
+    noHp: '081274561002',
+  },
+  {
+    id: 't-03',
+    nama: 'Rahmat Hidayat, S.Pd.I.',
+    nip: '198506202010011018',
+    inisial: 'RH',
+    mataPelajaran: 'Fikih',
+    noHp: '081274561003',
+  },
+  {
+    id: 't-04',
+    nama: 'Nurul Hidayati, S.Si.',
+    nip: '198811052014022003',
+    inisial: 'NH',
+    mataPelajaran: 'Matematika',
+    noHp: '081274561004',
+  },
+  {
+    id: 't-05',
+    nama: 'Zainuddin, S.Ag.',
+    nip: '197508142003121002',
+    inisial: 'ZA',
+    mataPelajaran: 'Sejarah Kebudayaan Islam',
+    noHp: '081274561005',
+  },
+  {
+    id: 't-06',
+    nama: 'Fatmawati, S.Pd.',
+    nip: '198902182015032005',
+    inisial: 'FW',
+    mataPelajaran: 'IPA Terpadu',
+    noHp: '081274561006',
+  },
+  {
+    id: 't-07',
+    nama: 'Budi Santoso, S.Pd.',
+    nip: '198201252008011009',
+    inisial: 'BS',
+    mataPelajaran: 'Bahasa Indonesia',
+    noHp: '081274561007',
+  },
+  {
+    id: 't-08',
+    nama: 'Laila Muniroh, S.Pd.I.',
+    nip: '199105122019032014',
+    inisial: 'LM',
+    mataPelajaran: 'Bahasa Arab',
+    noHp: '081274561008',
+  },
+  {
+    id: 't-09',
+    nama: 'Ahmad Ridwan, S.Pd.',
+    nip: '198709302011011007',
+    inisial: 'AR',
+    mataPelajaran: 'Bahasa Inggris',
+    noHp: '081274561009',
+  },
+  {
+    id: 't-10',
+    nama: 'Siti Rahmawati, S.E.',
+    nip: '198403222009122006',
+    inisial: 'SR',
+    mataPelajaran: 'IPS Terpadu',
+    noHp: '081274561010',
+  },
+  {
+    id: 't-11',
+    nama: 'M. Miftahul Huda, S.Pd.I.',
+    nip: '199307042020121008',
+    inisial: 'MH',
+    mataPelajaran: 'Pendidikan Pancasila',
+    noHp: '081274561011',
+  },
+  {
+    id: 't-12',
+    nama: 'Khoirul Anam, S.Kom.',
+    nip: '199510102022031005',
+    inisial: 'KA',
+    mataPelajaran: 'Informatika',
+    noHp: '081274561012',
+  },
+];
 
 export const DEFAULT_EXAM_ROOMS: ExamRoom[] = [
   {
@@ -355,8 +459,8 @@ export const DEFAULT_EXAM_ROOMS: ExamRoom[] = [
     kapasitas: 20,
     barisMeja: 5,
     kolomMeja: 4,
-    pengawas1: 'Dra. Hj. Siti Aminah',
-    pengawas2: 'Ust. Muhammad Ilyas, S.Pd.',
+    pengawas1: 'Dra. Hj. Siti Aminah, M.Pd.',
+    pengawas2: 'Ust. Muhammad Ilyas, S.Pd.I.',
   },
   {
     id: 'room-02',
@@ -391,16 +495,83 @@ export const DEFAULT_EXAM_ROOMS: ExamRoom[] = [
 ];
 
 export const DEFAULT_EXAM_SCHEDULE: ExamScheduleItem[] = [
-  { hariTanggal: 'Senin, 01 Des 2026', jam: '07.30 - 09.30', mataPelajaran: 'Al-Qur\'an Hadis' },
-  { hariTanggal: 'Senin, 01 Des 2026', jam: '10.00 - 11.30', mataPelajaran: 'Akidah Akhlak' },
-  { hariTanggal: 'Selasa, 02 Des 2026', jam: '07.30 - 09.30', mataPelajaran: 'Bahasa Indonesia' },
-  { hariTanggal: 'Selasa, 02 Des 2026', jam: '10.00 - 11.30', mataPelajaran: 'Fikih' },
-  { hariTanggal: 'Rabu, 03 Des 2026', jam: '07.30 - 09.30', mataPelajaran: 'Matematika' },
-  { hariTanggal: 'Rabu, 03 Des 2026', jam: '10.00 - 11.30', mataPelajaran: 'Sejarah Kebudayaan Islam' },
-  { hariTanggal: 'Kamis, 04 Des 2026', jam: '07.30 - 09.30', mataPelajaran: 'IPA Terpadu' },
-  { hariTanggal: 'Kamis, 04 Des 2026', jam: '10.00 - 11.30', mataPelajaran: 'Bahasa Arab' },
-  { hariTanggal: 'Jumat, 05 Des 2026', jam: '07.30 - 09.30', mataPelajaran: 'Bahasa Inggris' },
-  { hariTanggal: 'Sabtu, 06 Des 2026', jam: '07.30 - 09.30', mataPelajaran: 'IPS Terpadu' },
-  { hariTanggal: 'Senin, 08 Des 2026', jam: '07.30 - 09.30', mataPelajaran: 'Pendidikan Pancasila' },
+  {
+    id: 'sch-01',
+    hariTanggal: 'Senin, 01 Des 2026',
+    jam: '07.30 - 09.30',
+    mataPelajaran: 'Al-Qur\'an Hadis',
+    roomSupervisors: { 'room-01': 'SA', 'room-02': 'RH', 'room-03': 'ZA', 'room-04': 'BS' },
+  },
+  {
+    id: 'sch-02',
+    hariTanggal: 'Senin, 01 Des 2026',
+    jam: '10.00 - 11.30',
+    mataPelajaran: 'Akidah Akhlak',
+    roomSupervisors: { 'room-01': 'MI', 'room-02': 'NH', 'room-03': 'FW', 'room-04': 'LM' },
+  },
+  {
+    id: 'sch-03',
+    hariTanggal: 'Selasa, 02 Des 2026',
+    jam: '07.30 - 09.30',
+    mataPelajaran: 'Bahasa Indonesia',
+    roomSupervisors: { 'room-01': 'BS', 'room-02': 'AR', 'room-03': 'SR', 'room-04': 'MH' },
+  },
+  {
+    id: 'sch-04',
+    hariTanggal: 'Selasa, 02 Des 2026',
+    jam: '10.00 - 11.30',
+    mataPelajaran: 'Fikih',
+    roomSupervisors: { 'room-01': 'RH', 'room-02': 'SA', 'room-03': 'KA', 'room-04': 'ZA' },
+  },
+  {
+    id: 'sch-05',
+    hariTanggal: 'Rabu, 03 Des 2026',
+    jam: '07.30 - 09.30',
+    mataPelajaran: 'Matematika',
+    roomSupervisors: { 'room-01': 'NH', 'room-02': 'FW', 'room-03': 'MI', 'room-04': 'BS' },
+  },
+  {
+    id: 'sch-06',
+    hariTanggal: 'Rabu, 03 Des 2026',
+    jam: '10.00 - 11.30',
+    mataPelajaran: 'Sejarah Kebudayaan Islam',
+    roomSupervisors: { 'room-01': 'ZA', 'room-02': 'LM', 'room-03': 'AR', 'room-04': 'SR' },
+  },
+  {
+    id: 'sch-07',
+    hariTanggal: 'Kamis, 04 Des 2026',
+    jam: '07.30 - 09.30',
+    mataPelajaran: 'IPA Terpadu',
+    roomSupervisors: { 'room-01': 'FW', 'room-02': 'NH', 'room-03': 'MH', 'room-04': 'KA' },
+  },
+  {
+    id: 'sch-08',
+    hariTanggal: 'Kamis, 04 Des 2026',
+    jam: '10.00 - 11.30',
+    mataPelajaran: 'Bahasa Arab',
+    roomSupervisors: { 'room-01': 'LM', 'room-02': 'RH', 'room-03': 'SA', 'room-04': 'MI' },
+  },
+  {
+    id: 'sch-09',
+    hariTanggal: 'Jumat, 05 Des 2026',
+    jam: '07.30 - 09.30',
+    mataPelajaran: 'Bahasa Inggris',
+    roomSupervisors: { 'room-01': 'AR', 'room-02': 'BS', 'room-03': 'SR', 'room-04': 'ZA' },
+  },
+  {
+    id: 'sch-10',
+    hariTanggal: 'Sabtu, 06 Des 2026',
+    jam: '07.30 - 09.30',
+    mataPelajaran: 'IPS Terpadu',
+    roomSupervisors: { 'room-01': 'SR', 'room-02': 'MH', 'room-03': 'FW', 'room-04': 'NH' },
+  },
+  {
+    id: 'sch-11',
+    hariTanggal: 'Senin, 08 Des 2026',
+    jam: '07.30 - 09.30',
+    mataPelajaran: 'Pendidikan Pancasila',
+    roomSupervisors: { 'room-01': 'MH', 'room-02': 'KA', 'room-03': 'BS', 'room-04': 'LM' },
+  },
 ];
+
 
