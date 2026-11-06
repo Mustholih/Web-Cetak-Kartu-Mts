@@ -104,6 +104,41 @@ export interface BatchPhotoMatch {
   status: 'matched' | 'unmatched' | 'applied';
 }
 
+export interface ExamInfo {
+  namaUjian: string;
+  subNamaUjian: string;
+  tahunPelajaran: string;
+  semester: string;
+  tanggalUjian: string;
+  nomorPesertaPrefix: string; // e.g. "02-15-023-"
+}
+
+export interface ExamRoom {
+  id: string;
+  nomorRuang: string; // e.g. "Ruang 01", "Ruang 02"
+  namaRuang: string; // e.g. "Kelas 7A" or "Lab IPA"
+  kapasitas: number; // e.g. 20
+  barisMeja: number; // e.g. 5
+  kolomMeja: number; // e.g. 4
+  pengawas1: string;
+  pengawas2: string;
+}
+
+export interface ExamAllocation {
+  id: string;
+  studentId: string;
+  roomId: string;
+  nomorPeserta: string;
+  nomorMeja: number; // 1..kapasitas
+  isCardPrinted?: boolean;
+}
+
+export interface ExamScheduleItem {
+  hariTanggal: string;
+  jam: string;
+  mataPelajaran: string;
+}
+
 export type ActiveTab =
   | 'dashboard'
   | 'data-siswa'
@@ -112,5 +147,7 @@ export type ActiveTab =
   | 'desain-perpus'
   | 'desain-siswa'
   | 'cetak-kartu'
+  | 'manajemen-ujian'
   | 'tahun-pelajaran'
   | 'backup-data';
+

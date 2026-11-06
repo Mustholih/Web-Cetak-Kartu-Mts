@@ -16,6 +16,7 @@ import {
   AlertCircle,
   MapPin,
   Calendar,
+  Award,
 } from 'lucide-react';
 import { Student, SchoolIdentity, ActiveTab } from '../../types';
 
@@ -94,6 +95,14 @@ export const DashboardView: React.FC<Props> = ({
 
           <div className="flex flex-wrap gap-2.5">
             <button
+              onClick={() => setActiveTab('manajemen-ujian')}
+              className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-emerald-950/80 hover:bg-emerald-900 text-amber-300 font-bold text-xs border border-amber-400/50 shadow-md transition-all cursor-pointer backdrop-blur-sm"
+            >
+              <Award className="w-4 h-4 text-amber-400" />
+              <span>Manajemen Ujian</span>
+              <span className="bg-amber-400 text-emerald-950 text-[10px] px-1.5 py-0.2 rounded-full font-extrabold">BARU</span>
+            </button>
+            <button
               onClick={() => setActiveTab('cetak-kartu')}
               className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-emerald-950 font-bold text-xs shadow-md transition-all cursor-pointer"
             >
@@ -112,7 +121,7 @@ export const DashboardView: React.FC<Props> = ({
       </div>
 
       {/* Quick Action Cards */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3.5">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3.5">
         <button
           onClick={onOpenImportModal}
           className="p-4 rounded-xl bg-white border border-slate-200 hover:border-emerald-500 hover:shadow-md transition-all text-left flex items-center gap-3.5 group cursor-pointer"
@@ -155,6 +164,24 @@ export const DashboardView: React.FC<Props> = ({
               Tambah Siswa
             </h3>
             <p className="text-[11px] text-slate-500">Input manual 1 siswa</p>
+          </div>
+        </button>
+
+        <button
+          onClick={() => setActiveTab('manajemen-ujian')}
+          className="p-4 rounded-xl bg-gradient-to-br from-emerald-900 to-emerald-950 border border-emerald-700 hover:border-amber-400 hover:shadow-lg transition-all text-left flex items-center gap-3.5 group cursor-pointer"
+        >
+          <div className="w-11 h-11 rounded-xl bg-amber-400 text-emerald-950 flex items-center justify-center group-hover:scale-105 transition-transform font-bold shadow-xs">
+            <Award className="w-6 h-6" />
+          </div>
+          <div>
+            <div className="flex items-center gap-1.5">
+              <h3 className="text-xs font-bold text-white group-hover:text-amber-300">
+                Manajemen Ujian
+              </h3>
+              <span className="text-[9px] bg-amber-400 text-emerald-950 font-black px-1.5 py-0.2 rounded-full">BARU</span>
+            </div>
+            <p className="text-[11px] text-emerald-200/90">Ruang, Denah & Absen</p>
           </div>
         </button>
 

@@ -60,9 +60,15 @@ export const Sidebar: React.FC<Props> = ({
     },
     {
       id: 'cetak-kartu',
-      label: 'Cetak Kartu',
+      label: 'Cetak Kartu Siswa',
       icon: <Printer className="w-5 h-5" />,
       badge: 'Utama',
+    },
+    {
+      id: 'manajemen-ujian',
+      label: 'Manajemen Ujian',
+      icon: <Award className="w-5 h-5" />,
+      badge: 'Baru',
     },
     {
       id: 'tahun-pelajaran',

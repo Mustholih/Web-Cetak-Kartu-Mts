@@ -5,6 +5,10 @@ import {
   SchoolIdentity,
   LibraryCardConfig,
   StudentCardConfig,
+  ExamInfo,
+  ExamRoom,
+  ExamAllocation,
+  ExamScheduleItem,
 } from './types';
 import { StorageService } from './services/storage';
 import { Sidebar } from './components/navigation/Sidebar';
@@ -15,6 +19,7 @@ import { IdentitasMadrasahView } from './components/views/IdentitasMadrasahView'
 import { DesainKartuPerpusView } from './components/views/DesainKartuPerpusView';
 import { DesainKartuSiswaView } from './components/views/DesainKartuSiswaView';
 import { CetakKartuView } from './components/views/CetakKartuView';
+import { ManajemenUjianView } from './components/views/ManajemenUjianView';
 import { TahunPelajaranView } from './components/views/TahunPelajaranView';
 import { BackupDataView } from './components/views/BackupDataView';
 import { ImportExcelModal } from './components/modals/ImportExcelModal';
@@ -42,6 +47,16 @@ export default function App() {
     StorageService.getAcademicYears()
   );
   const [adminPin, setAdminPin] = useState<string>(StorageService.getAdminPin());
+
+  // Exam Management state
+  const [examInfo, setExamInfo] = useState<ExamInfo>(StorageService.getExamInfo());
+  const [examRooms, setExamRooms] = useState<ExamRoom[]>(StorageService.getExamRooms());
+  const [examAllocations, setExamAllocations] = useState<ExamAllocation[]>(
+    StorageService.getExamAllocations()
+  );
+  const [examSchedule, setExamSchedule] = useState<ExamScheduleItem[]>(
+    StorageService.getExamSchedule()
+  );
 
   // Modals & Navigation state
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
@@ -159,6 +174,31 @@ export default function App() {
     setAdminPin(pin);
   };
 
+  // Exam Management Handlers
+  const handleSaveExamInfo = (newInfo: ExamInfo) => {
+    StorageService.saveExamInfo(newInfo);
+    setExamInfo(newInfo);
+    showToast('Pengaturan ujian berhasil disimpan!');
+  };
+
+  const handleSaveExamRooms = (newRooms: ExamRoom[]) => {
+    StorageService.saveExamRooms(newRooms);
+    setExamRooms(newRooms);
+    showToast('Data ruang ujian berhasil disimpan!');
+  };
+
+  const handleSaveExamAllocations = (newAllocations: ExamAllocation[]) => {
+    StorageService.saveExamAllocations(newAllocations);
+    setExamAllocations(newAllocations);
+    showToast('Penempatan siswa berhasil disimpan!');
+  };
+
+  const handleSaveExamSchedule = (newSchedule: ExamScheduleItem[]) => {
+    StorageService.saveExamSchedule(newSchedule);
+    setExamSchedule(newSchedule);
+    showToast('Jadwal ujian berhasil disimpan!');
+  };
+
   // Mass Promotion
   const handlePromoteStudents = () => {
     const current = [...students];
@@ -235,6 +275,10 @@ export default function App() {
     setStudentConfig(StorageService.getStudentConfig());
     setAcademicYears(StorageService.getAcademicYears());
     setAdminPin(StorageService.getAdminPin());
+    setExamInfo(StorageService.getExamInfo());
+    setExamRooms(StorageService.getExamRooms());
+    setExamAllocations(StorageService.getExamAllocations());
+    setExamSchedule(StorageService.getExamSchedule());
     showToast('Seluruh data berhasil disinkronisasi dari cadangan!');
   };
 
@@ -384,6 +428,21 @@ export default function App() {
                 studentConfig={studentConfig}
                 onMarkAsPrinted={handleMarkAsPrinted}
                 preSelectedIds={preSelectedPrintIds}
+              />
+            )}
+
+            {activeTab === 'manajemen-ujian' && (
+              <ManajemenUjianView
+                students={students}
+                identity={identity}
+                examInfo={examInfo}
+                examRooms={examRooms}
+                examAllocations={examAllocations}
+                examSchedule={examSchedule}
+                onSaveExamInfo={handleSaveExamInfo}
+                onSaveExamRooms={handleSaveExamRooms}
+                onSaveExamAllocations={handleSaveExamAllocations}
+                onSaveExamSchedule={handleSaveExamSchedule}
               />
             )}
 

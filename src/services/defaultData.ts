@@ -1,4 +1,12 @@
-import { SchoolIdentity, Student, LibraryCardConfig, StudentCardConfig } from '../types';
+import {
+  SchoolIdentity,
+  Student,
+  LibraryCardConfig,
+  StudentCardConfig,
+  ExamInfo,
+  ExamRoom,
+  ExamScheduleItem,
+} from '../types';
 
 // Authentic Madrasah Logo SVG as Base64 Data URL
 export const DEFAULT_LOGO_SVG = `data:image/svg+xml;utf8,${encodeURIComponent(`
@@ -328,3 +336,71 @@ export const DEFAULT_STUDENTS: Student[] = [
     isStudentCardPrinted: false,
   },
 ];
+
+// Default Exam Configuration
+export const DEFAULT_EXAM_INFO: ExamInfo = {
+  namaUjian: 'ASESMEN SUMATIF AKHIR SEMESTER (ASAS)',
+  subNamaUjian: 'MADRASAH TSANAWIYAH MIFTAHUL HUDA',
+  tahunPelajaran: '2026/2027',
+  semester: 'Ganjil',
+  tanggalUjian: '01 - 08 Desember 2026',
+  nomorPesertaPrefix: '02-15-023-',
+};
+
+export const DEFAULT_EXAM_ROOMS: ExamRoom[] = [
+  {
+    id: 'room-01',
+    nomorRuang: 'Ruang 01',
+    namaRuang: 'Gedung A - Kelas 7A',
+    kapasitas: 20,
+    barisMeja: 5,
+    kolomMeja: 4,
+    pengawas1: 'Dra. Hj. Siti Aminah',
+    pengawas2: 'Ust. Muhammad Ilyas, S.Pd.',
+  },
+  {
+    id: 'room-02',
+    nomorRuang: 'Ruang 02',
+    namaRuang: 'Gedung A - Kelas 7B',
+    kapasitas: 20,
+    barisMeja: 5,
+    kolomMeja: 4,
+    pengawas1: 'Rahmat Hidayat, S.Pd.I.',
+    pengawas2: 'Nurul Hidayati, S.Si.',
+  },
+  {
+    id: 'room-03',
+    nomorRuang: 'Ruang 03',
+    namaRuang: 'Gedung B - Kelas 8A',
+    kapasitas: 20,
+    barisMeja: 5,
+    kolomMeja: 4,
+    pengawas1: 'Zainuddin, S.Ag.',
+    pengawas2: 'Fatmawati, S.Pd.',
+  },
+  {
+    id: 'room-04',
+    nomorRuang: 'Ruang 04',
+    namaRuang: 'Gedung B - Kelas 8B',
+    kapasitas: 20,
+    barisMeja: 5,
+    kolomMeja: 4,
+    pengawas1: 'Budi Santoso, S.Pd.',
+    pengawas2: 'Laila Muniroh, S.Pd.I.',
+  },
+];
+
+export const DEFAULT_EXAM_SCHEDULE: ExamScheduleItem[] = [
+  { hariTanggal: 'Senin, 01 Des 2026', jam: '07.30 - 09.30', mataPelajaran: 'Al-Qur\'an Hadis' },
+  { hariTanggal: 'Senin, 01 Des 2026', jam: '10.00 - 11.30', mataPelajaran: 'Akidah Akhlak' },
+  { hariTanggal: 'Selasa, 02 Des 2026', jam: '07.30 - 09.30', mataPelajaran: 'Bahasa Indonesia' },
+  { hariTanggal: 'Selasa, 02 Des 2026', jam: '10.00 - 11.30', mataPelajaran: 'Fikih' },
+  { hariTanggal: 'Rabu, 03 Des 2026', jam: '07.30 - 09.30', mataPelajaran: 'Matematika' },
+  { hariTanggal: 'Rabu, 03 Des 2026', jam: '10.00 - 11.30', mataPelajaran: 'Sejarah Kebudayaan Islam' },
+  { hariTanggal: 'Kamis, 04 Des 2026', jam: '07.30 - 09.30', mataPelajaran: 'IPA Terpadu' },
+  { hariTanggal: 'Kamis, 04 Des 2026', jam: '10.00 - 11.30', mataPelajaran: 'Bahasa Arab' },
+  { hariTanggal: 'Jumat, 05 Des 2026', jam: '07.30 - 09.30', mataPelajaran: 'Bahasa Inggris' },
+  { hariTanggal: 'Sabtu, 06 Des 2026', jam: '07.30 - 09.30', mataPelajaran: 'IPS Terpadu' },
+  { hariTanggal: 'Senin, 08 Des 2026', jam: '07.30 - 09.30', mataPelajaran: 'Pendidikan Pancasila' },
+];
+
