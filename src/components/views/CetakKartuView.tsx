@@ -13,7 +13,6 @@ import {
   Grid,
   Scissors,
   Layers,
-  ArrowRight,
   Filter,
 } from 'lucide-react';
 import {
@@ -27,6 +26,12 @@ import { LibraryCardBack } from '../cards/LibraryCardBack';
 import { StudentCardFront } from '../cards/StudentCardFront';
 import { StudentCardBack } from '../cards/StudentCardBack';
 import { PrintService } from '../../services/printService';
+
+interface PrintableCardItem {
+  id: string;
+  student: Student;
+  side: 'front' | 'back';
+}
 
 interface Props {
   students: Student[];
@@ -55,9 +60,9 @@ export const CetakKartuView: React.FC<Props> = ({
     preSelectedIds.length > 0 ? preSelectedIds : []
   );
 
-  // Print layout settings
+  // Print layout settings: 8 cards per page (2 cols x 4 rows) or 10 cards per page (2 cols x 5 rows)
+  const [cardsPerPage, setCardsPerPage] = useState<number>(8);
   const [showCropMarks, setShowCropMarks] = useState<boolean>(true);
-  const [cardsPerPage, setCardsPerPage] = useState<number>(8); // 8 cards per A4 (2 columns x 4 rows)
   const [gapMm, setGapMm] = useState<number>(4);
   const [marginMm, setMarginMm] = useState<number>(8);
 
@@ -83,6 +88,27 @@ export const CetakKartuView: React.FC<Props> = ({
     }
   }, [students, filterMode, selectedStudentIds]);
 
+  // Segment card items into pages (e.g. 8 or 10 cards per page)
+  const pagesOfCards = useMemo(() => {
+    const items: PrintableCardItem[] = [];
+    targetStudents.forEach((std) => {
+      if (cardSide === 'front' || cardSide === 'both') {
+        items.push({ id: `${std.id}-front`, student: std, side: 'front' });
+      }
+      if (cardSide === 'back' || cardSide === 'both') {
+        items.push({ id: `${std.id}-back`, student: std, side: 'back' });
+      }
+    });
+
+    const pages: PrintableCardItem[][] = [];
+    for (let i = 0; i < items.length; i += cardsPerPage) {
+      pages.push(items.slice(i, i + cardsPerPage));
+    }
+    return pages;
+  }, [targetStudents, cardSide, cardsPerPage]);
+
+  const totalCardItems = pagesOfCards.reduce((acc, curr) => acc + curr.length, 0);
+
   // Handle student selection toggle
   const handleToggleStudent = (id: string) => {
     setSelectedStudentIds((prev) =>
@@ -104,7 +130,6 @@ export const CetakKartuView: React.FC<Props> = ({
       alert('Pilih minimal satu siswa untuk dicetak.');
       return;
     }
-    // Mark as printed
     onMarkAsPrinted(
       targetStudents.map((s) => s.id),
       cardType
@@ -112,26 +137,31 @@ export const CetakKartuView: React.FC<Props> = ({
     window.print();
   };
 
-  // PDF Export
+  // Multi-Page PDF Export
   const handleExportPdf = async () => {
     if (!printAreaRef.current || targetStudents.length === 0) {
       alert('Pilih siswa untuk dicetak.');
       return;
     }
     setIsExporting(true);
-    setExportNotice('Sedang membuat file PDF berkualitas tinggi (100% ukuran asli)...');
+    setExportNotice(
+      `Sedang memproses PDF A4 (${pagesOfCards.length} lembar, ${totalCardItems} kartu)...`
+    );
     try {
       const typeLabel = cardType === 'perpus' ? 'Kartu_Perpus' : 'Kartu_Siswa';
       const classLabel = filterMode.toUpperCase();
       await PrintService.downloadA4SheetPdf(
         printAreaRef.current,
-        `Cetak_${typeLabel}_MTs_Miftahul_Huda_${classLabel}`
+        `Cetak_${typeLabel}_MTs_Miftahul_Huda_${classLabel}`,
+        (cur, total) => {
+          setExportNotice(`Sedang merender halaman A4 ke-${cur} dari ${total} halaman...`);
+        }
       );
       onMarkAsPrinted(
         targetStudents.map((s) => s.id),
         cardType
       );
-      setExportNotice('File PDF siap cetak berhasil diunduh!');
+      setExportNotice(`File PDF berhasil diunduh (${pagesOfCards.length} halaman A4 siap cetak)!`);
       setTimeout(() => setExportNotice(null), 4000);
     } catch (e: any) {
       alert(`Gagal membuat PDF: ${e.message}`);
@@ -140,15 +170,18 @@ export const CetakKartuView: React.FC<Props> = ({
     }
   };
 
-  // High-res PNG Export
+  // High-res PNG Export (first page or single sheet)
   const handleExportPng = async () => {
     if (!printAreaRef.current || targetStudents.length === 0) return;
+    const firstPage = printAreaRef.current.querySelector<HTMLElement>('.a4-sheet-page');
+    if (!firstPage) return;
+
     setIsExporting(true);
-    setExportNotice('Sedang merender gambar beresolusi tinggi...');
+    setExportNotice('Sedang merender lembar pertama dalam resolusi tinggi...');
     try {
       await PrintService.downloadElementAsPng(
-        printAreaRef.current,
-        `Lembar_Cetak_A4_${cardType}_${Date.now()}`
+        firstPage,
+        `Lembar_A4_${cardType}_Halaman_1_${Date.now()}`
       );
       setExportNotice('File PNG berhasil diunduh!');
       setTimeout(() => setExportNotice(null), 4000);
@@ -167,11 +200,11 @@ export const CetakKartuView: React.FC<Props> = ({
           <h2 className="text-base font-extrabold text-slate-900 flex items-center gap-2">
             <span>Pusat Cetak Kartu Siswa & Perpustakaan</span>
             <span className="px-2.5 py-0.5 rounded-full bg-emerald-100 text-emerald-800 text-xs font-bold">
-              Siap Cetak Kertas A4
+              {pagesOfCards.length} Lembar A4 ({totalCardItems} Kartu)
             </span>
           </h2>
           <p className="text-xs text-slate-500 mt-1">
-            Cetak massal dalam lembar kertas A4 atau download PDF/PNG ukuran asli 85.60 mm × 53.98 mm.
+            Setiap lembar A4 otomatis dibagi rapi ({cardsPerPage} kartu per lembar). Jika ada lebih dari {cardsPerPage} kartu, otomatis dipisah ke halaman berikutnya.
           </p>
         </div>
 
@@ -190,10 +223,10 @@ export const CetakKartuView: React.FC<Props> = ({
             onClick={handleExportPdf}
             disabled={isExporting || targetStudents.length === 0}
             className="px-4 py-2 rounded-xl bg-emerald-800 hover:bg-emerald-900 text-white text-xs font-bold flex items-center gap-2 shadow-sm transition-all cursor-pointer"
-            title="Download file PDF A4 dengan kartu ukuran presisi"
+            title="Download file PDF multi-halaman A4 dengan kartu ukuran presisi"
           >
             <FileDown className="w-4 h-4 text-emerald-300" />
-            <span>Download PDF A4</span>
+            <span>Download PDF A4 ({pagesOfCards.length} Hal)</span>
           </button>
           <button
             onClick={handlePrintBrowser}
@@ -363,7 +396,7 @@ export const CetakKartuView: React.FC<Props> = ({
                   onChange={() => setCardSide('back')}
                   className="text-emerald-700 focus:ring-emerald-600"
                 />
-                <span>Hanya Sisi Belakang (Tata Tertib / Ketentuan)</span>
+                <span>Hanya Sisi Belakang</span>
               </label>
               <label className="flex items-center gap-1.5 cursor-pointer">
                 <input
@@ -427,11 +460,44 @@ export const CetakKartuView: React.FC<Props> = ({
           </h3>
 
           <div className="space-y-3.5">
+            {/* Cards Per Page Selector */}
+            <div>
+              <label className="block text-xs font-bold text-slate-700 mb-1.5">
+                Kapasitas Kartu per Lembar A4:
+              </label>
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={() => setCardsPerPage(8)}
+                  className={`p-2.5 rounded-xl border text-left transition-all cursor-pointer ${
+                    cardsPerPage === 8
+                      ? 'border-emerald-600 bg-emerald-50 text-emerald-950 font-bold'
+                      : 'border-slate-200 bg-slate-50 text-slate-700'
+                  }`}
+                >
+                  <p className="text-xs font-bold">8 Kartu / Lembar</p>
+                  <p className="text-[10px] text-slate-500">2 kolom × 4 baris (Rekomendasi)</p>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setCardsPerPage(10)}
+                  className={`p-2.5 rounded-xl border text-left transition-all cursor-pointer ${
+                    cardsPerPage === 10
+                      ? 'border-emerald-600 bg-emerald-50 text-emerald-950 font-bold'
+                      : 'border-slate-200 bg-slate-50 text-slate-700'
+                  }`}
+                >
+                  <p className="text-xs font-bold">10 Kartu / Lembar</p>
+                  <p className="text-[10px] text-slate-500">2 kolom × 5 baris (Hemat Kertas)</p>
+                </button>
+              </div>
+            </div>
+
             <div>
               <div className="flex justify-between text-xs text-slate-700 font-semibold mb-1">
                 <span>Garis Potong (Crop Marks):</span>
                 <span className="text-emerald-800 font-bold">
-                  {showCropMarks ? 'Aktif (Ada Tanda Gunting)' : 'Nonaktif'}
+                  {showCropMarks ? 'Aktif' : 'Nonaktif'}
                 </span>
               </div>
               <label className="flex items-center gap-2 text-xs text-slate-600 cursor-pointer">
@@ -441,19 +507,19 @@ export const CetakKartuView: React.FC<Props> = ({
                   onChange={(e) => setShowCropMarks(e.target.checked)}
                   className="rounded text-emerald-700 focus:ring-emerald-600"
                 />
-                <span>Tampilkan garis potong tepi tipis untuk memudahkan pemotongan manual</span>
+                <span>Tampilkan garis tepi tipis sebagai panduan pemotongan</span>
               </label>
             </div>
 
             <div>
               <div className="flex justify-between text-xs text-slate-700 font-semibold mb-1">
-                <span>Jarak Antar Kartu:</span>
+                <span>Jarak Antar Kartu (Gap):</span>
                 <span className="text-emerald-800 font-bold">{gapMm} mm</span>
               </div>
               <input
                 type="range"
                 min="1"
-                max="10"
+                max="8"
                 step="1"
                 value={gapMm}
                 onChange={(e) => setGapMm(parseInt(e.target.value))}
@@ -461,85 +527,87 @@ export const CetakKartuView: React.FC<Props> = ({
               />
             </div>
 
-            <div>
-              <div className="flex justify-between text-xs text-slate-700 font-semibold mb-1">
-                <span>Margin Tepi Kertas A4:</span>
-                <span className="text-emerald-800 font-bold">{marginMm} mm</span>
-              </div>
-              <input
-                type="range"
-                min="4"
-                max="16"
-                step="1"
-                value={marginMm}
-                onChange={(e) => setMarginMm(parseInt(e.target.value))}
-                className="w-full accent-emerald-700"
-              />
-            </div>
-
             <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 text-xs text-slate-600 space-y-1">
               <p className="font-bold text-slate-800 flex items-center gap-1.5">
                 <Scissors className="w-3.5 h-3.5 text-amber-600" />
-                <span>Rekomendasi Pencetakan:</span>
+                <span>Petunjuk Pencetakan:</span>
               </p>
               <p className="text-[11px] leading-relaxed">
-                • Gunakan kertas <strong>PVC Instant Card</strong>, Art Paper 260/310 gsm, atau Glossy Photo Paper.
+                • Total siswa: <strong>{targetStudents.length}</strong> ➜ otomatis dibagi menjadi <strong>{pagesOfCards.length} halaman A4</strong> di file PDF.
               </p>
               <p className="text-[11px] leading-relaxed">
-                • Pada dialog printer browser, pilih <strong>Scale: 100%</strong> (Actual Size) dan centang <strong>Print Background Graphics</strong>.
+                • Kartu tidak akan terdistorsi atau tertekan karena setiap halaman A4 memuat tepat maks. {cardsPerPage} kartu berukuran asli 85.6 × 53.98 mm.
               </p>
             </div>
           </div>
         </div>
       </div>
 
-      {/* Visual Live A4 Sheet Preview & Real Print DOM */}
-      <div className="space-y-3">
+      {/* Visual Live A4 Sheet Preview & Real Multi-Page Print DOM */}
+      <div className="space-y-4">
         <div className="flex items-center justify-between no-print">
           <div className="flex items-center gap-2">
             <h3 className="text-sm font-bold text-slate-900 flex items-center gap-1.5">
               <Eye className="w-4 h-4 text-emerald-700" />
-              <span>Preview Lembar Cetak A4 ({targetStudents.length} Siswa)</span>
+              <span>Preview Lembar Cetak A4 ({pagesOfCards.length} Halaman A4)</span>
             </h3>
           </div>
-          <span className="text-xs text-slate-500">
-            Total Halaman Estimasi: {Math.ceil(targetStudents.length / (cardsPerPage / (cardSide === 'both' ? 2 : 1)))} Halaman A4
+          <span className="text-xs text-slate-500 font-medium">
+            Total {totalCardItems} Kartu • {cardsPerPage} Kartu per Lembar
           </span>
         </div>
 
-        {/* The Printable A4 Container */}
-        <div className="bg-slate-200/80 p-4 sm:p-8 rounded-2xl border border-slate-300 flex justify-center overflow-x-auto shadow-inner">
-          <div
-            ref={printAreaRef}
-            id="print-sheet-a4"
-            className="bg-white shadow-2xl transition-all"
-            style={{
-              width: '210mm',
-              minHeight: '297mm',
-              padding: `${marginMm}mm`,
-              boxSizing: 'border-box',
-              backgroundColor: '#ffffff',
-            }}
-          >
-            {targetStudents.length === 0 ? (
-              <div className="py-24 text-center text-slate-400">
+        {/* The Printable Multi-Page Container */}
+        <div className="bg-slate-200/90 p-4 sm:p-8 rounded-2xl border border-slate-300 flex flex-col items-center overflow-x-auto shadow-inner">
+          <div ref={printAreaRef} id="print-sheet-container" className="space-y-10">
+            {pagesOfCards.length === 0 ? (
+              <div className="bg-white p-16 rounded-2xl shadow text-center text-slate-400 w-[210mm]">
                 <p className="text-base font-bold">Tidak ada siswa yang dipilih untuk dicetak.</p>
                 <p className="text-xs mt-1">Pilih filter atau centang siswa pada opsi di atas.</p>
               </div>
             ) : (
-              <div
-                className="grid grid-cols-2"
-                style={{
-                  gap: `${gapMm}mm`,
-                  rowGap: `${gapMm}mm`,
-                }}
-              >
-                {targetStudents.map((std) => {
-                  return (
-                    <React.Fragment key={std.id}>
-                      {/* Front Side */}
-                      {(cardSide === 'front' || cardSide === 'both') && (
+              pagesOfCards.map((pageCards, pageIndex) => (
+                <div key={pageIndex} className="flex flex-col items-center">
+                  {/* Page Badge header in UI (hidden during print) */}
+                  <div className="mb-2 text-xs font-bold text-slate-700 no-print flex items-center justify-between w-full max-w-[210mm] px-2">
+                    <span className="px-3 py-1 rounded-full bg-emerald-800 text-white text-[11px] font-bold shadow-xs">
+                      Lembar A4 - Halaman {pageIndex + 1} dari {pagesOfCards.length}
+                    </span>
+                    <span className="text-slate-500 text-[11px]">
+                      {pageCards.length} Kartu di halaman ini
+                    </span>
+                  </div>
+
+                  {/* Individual A4 Page */}
+                  <div
+                    className="a4-sheet-page bg-white shadow-2xl transition-all"
+                    style={{
+                      width: '210mm',
+                      height: '297mm',
+                      minHeight: '297mm',
+                      maxHeight: '297mm',
+                      padding: `${marginMm}mm`,
+                      boxSizing: 'border-box',
+                      backgroundColor: '#ffffff',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      overflow: 'hidden',
+                      pageBreakAfter: 'always',
+                      breakAfter: 'page',
+                    }}
+                  >
+                    <div
+                      className="grid grid-cols-2"
+                      style={{
+                        columnGap: `${gapMm}mm`,
+                        rowGap: `${gapMm}mm`,
+                      }}
+                    >
+                      {pageCards.map((item) => (
                         <div
+                          key={item.id}
                           className={`relative card-print-item ${
                             showCropMarks
                               ? 'outline outline-1 outline-dashed outline-slate-400'
@@ -553,72 +621,40 @@ export const CetakKartuView: React.FC<Props> = ({
                         >
                           {showCropMarks && (
                             <>
-                              <span className="absolute -top-1.5 -left-1.5 text-[7px] text-slate-400 font-mono pointer-events-none">
+                              <span className="absolute -top-1.5 -left-1.5 text-[7px] text-slate-400 font-mono pointer-events-none select-none">
                                 ┌
                               </span>
-                              <span className="absolute -top-1.5 -right-1.5 text-[7px] text-slate-400 font-mono pointer-events-none">
+                              <span className="absolute -top-1.5 -right-1.5 text-[7px] text-slate-400 font-mono pointer-events-none select-none">
                                 ┐
                               </span>
-                              <span className="absolute -bottom-1.5 -left-1.5 text-[7px] text-slate-400 font-mono pointer-events-none">
+                              <span className="absolute -bottom-1.5 -left-1.5 text-[7px] text-slate-400 font-mono pointer-events-none select-none">
                                 └
                               </span>
-                              <span className="absolute -bottom-1.5 -right-1.5 text-[7px] text-slate-400 font-mono pointer-events-none">
+                              <span className="absolute -bottom-1.5 -right-1.5 text-[7px] text-slate-400 font-mono pointer-events-none select-none">
                                 ┘
                               </span>
                             </>
                           )}
                           {cardType === 'perpus' ? (
-                            <LibraryCardFront
-                              student={std}
-                              identity={identity}
-                              config={libraryConfig}
-                              scale={1}
-                            />
-                          ) : (
+                            item.side === 'front' ? (
+                              <LibraryCardFront
+                                student={item.student}
+                                identity={identity}
+                                config={libraryConfig}
+                                scale={1}
+                              />
+                            ) : (
+                              <LibraryCardBack
+                                identity={identity}
+                                config={libraryConfig}
+                                scale={1}
+                              />
+                            )
+                          ) : item.side === 'front' ? (
                             <StudentCardFront
-                              student={std}
+                              student={item.student}
                               identity={identity}
                               config={studentConfig}
-                              scale={1}
-                            />
-                          )}
-                        </div>
-                      )}
-
-                      {/* Back Side */}
-                      {(cardSide === 'back' || cardSide === 'both') && (
-                        <div
-                          className={`relative card-print-item ${
-                            showCropMarks
-                              ? 'outline outline-1 outline-dashed outline-slate-400'
-                              : ''
-                          }`}
-                          style={{
-                            width: '85.6mm',
-                            height: '53.98mm',
-                            boxSizing: 'border-box',
-                          }}
-                        >
-                          {showCropMarks && (
-                            <>
-                              <span className="absolute -top-1.5 -left-1.5 text-[7px] text-slate-400 font-mono pointer-events-none">
-                                ┌
-                              </span>
-                              <span className="absolute -top-1.5 -right-1.5 text-[7px] text-slate-400 font-mono pointer-events-none">
-                                ┐
-                              </span>
-                              <span className="absolute -bottom-1.5 -left-1.5 text-[7px] text-slate-400 font-mono pointer-events-none">
-                                └
-                              </span>
-                              <span className="absolute -bottom-1.5 -right-1.5 text-[7px] text-slate-400 font-mono pointer-events-none">
-                                ┘
-                              </span>
-                            </>
-                          )}
-                          {cardType === 'perpus' ? (
-                            <LibraryCardBack
-                              identity={identity}
-                              config={libraryConfig}
                               scale={1}
                             />
                           ) : (
@@ -629,11 +665,11 @@ export const CetakKartuView: React.FC<Props> = ({
                             />
                           )}
                         </div>
-                      )}
-                    </React.Fragment>
-                  );
-                })}
-              </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              ))
             )}
           </div>
         </div>
