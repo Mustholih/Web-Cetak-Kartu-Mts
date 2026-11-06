@@ -1,0 +1,84 @@
+@import "tailwindcss";
+
+@layer base {
+  body {
+    font-family: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
+    color: #1e293b;
+    background-color: #f8fafc;
+  }
+}
+
+/* Print Specific Rules */
+@media print {
+  @page {
+    size: A4 portrait;
+    margin: 8mm;
+  }
+  
+  html, body {
+    background: #ffffff !important;
+    color: #000000 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  /* Hide UI elements during print */
+  .no-print,
+  nav,
+  aside,
+  header,
+  footer,
+  button,
+  .print-controls {
+    display: none !important;
+  }
+
+  /* Force display of the print-sheet */
+  .print-only-container {
+    display: block !important;
+    position: absolute !important;
+    top: 0 !important;
+    left: 0 !important;
+    width: 100% !important;
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+
+  /* Prevent page breaks inside cards */
+  .card-print-item {
+    break-inside: avoid !important;
+    page-break-inside: avoid !important;
+  }
+
+  .page-break-after {
+    page-break-after: always !important;
+    break-after: page !important;
+  }
+}
+
+/* Custom Barcode Font Simulation */
+.font-barcode {
+  font-family: 'Libre Barcode 39 Text', monospace;
+  letter-spacing: 2px;
+}
+
+/* Subtle Madrasah Islamic Pattern Background */
+.bg-islamic-pattern {
+  background-color: #f0fdf4;
+  background-image: radial-gradient(#15803d 0.75px, transparent 0.75px), radial-gradient(#d97706 0.75px, #f0fdf4 0.75px);
+  background-size: 30px 30px;
+  background-position: 0 0, 15px 15px;
+}
+
+/* ID-1 Card Standard Dimensions Aspect Ratio (85.6mm x 53.98mm = ~1.5857) */
+.id-card-ratio {
+  aspect-ratio: 85.6 / 53.98;
+}
+
+/* Glassmorphism helpers */
+.glass-panel {
+  background: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(8px);
+}
