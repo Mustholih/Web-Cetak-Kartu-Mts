@@ -35,19 +35,35 @@
     display: none !important;
   }
 
-  /* A4 Sheet page break rules */
+  /* A4 and F4 Sheet page break rules */
   .a4-sheet-page {
     width: 210mm !important;
     height: 297mm !important;
     min-height: 297mm !important;
     max-height: 297mm !important;
-    margin: 0 !important;
+    margin: 0 auto !important;
     padding: 8mm !important;
     box-shadow: none !important;
     page-break-after: always !important;
     break-after: page !important;
     page-break-inside: avoid !important;
     break-inside: avoid !important;
+    overflow: hidden !important;
+  }
+
+  .f4-sheet-page {
+    width: 215mm !important;
+    height: 330mm !important;
+    min-height: 330mm !important;
+    max-height: 330mm !important;
+    margin: 0 auto !important;
+    padding: 9mm !important;
+    box-shadow: none !important;
+    page-break-after: always !important;
+    break-after: page !important;
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
+    overflow: hidden !important;
   }
 
   /* Prevent page breaks inside cards */

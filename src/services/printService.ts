@@ -45,22 +45,26 @@ export const PrintService = {
     pdf.save(filename.endsWith('.pdf') ? filename : `${filename}.pdf`);
   },
 
-  // Export A4 Sheet with multiple pages (8 or 10 cards per A4 page) to multi-page A4 PDF
-  async downloadA4SheetPdf(
+  // Export Sheet with multiple pages to PDF (Supports A4: 210x297mm and F4/Folio: 215x330mm)
+  async downloadSheetPdf(
     containerElement: HTMLElement,
     filename: string,
+    paperSize: 'A4' | 'F4' = 'A4',
     onProgress?: (current: number, total: number) => void
   ): Promise<void> {
-    // Find all individual A4 page elements inside container
     const pageElements = Array.from(
-      containerElement.querySelectorAll<HTMLElement>('.a4-sheet-page')
+      containerElement.querySelectorAll<HTMLElement>('.a4-sheet-page, .sheet-page')
     );
     const targets = pageElements.length > 0 ? pageElements : [containerElement];
+
+    const isF4 = paperSize === 'F4';
+    const pageWidthMm = isF4 ? 215 : 210;
+    const pageHeightMm = isF4 ? 330 : 297;
 
     const pdf = new jsPDF({
       orientation: 'portrait',
       unit: 'mm',
-      format: 'a4',
+      format: isF4 ? [215, 330] : 'a4',
       compress: true,
     });
 
@@ -79,12 +83,21 @@ export const PrintService = {
 
       const imgData = canvas.toDataURL('image/jpeg', 0.96);
       if (i > 0) {
-        pdf.addPage('a4', 'portrait');
+        pdf.addPage(isF4 ? [215, 330] : 'a4', 'portrait');
       }
-      // A4 width: 210mm, height: 297mm
-      pdf.addImage(imgData, 'JPEG', 0, 0, 210, 297, undefined, 'FAST');
+      pdf.addImage(imgData, 'JPEG', 0, 0, pageWidthMm, pageHeightMm, undefined, 'FAST');
     }
 
-    pdf.save(filename.endsWith('.pdf') ? filename : `${filename}.pdf`);
+    const safeName = filename.endsWith('.pdf') ? filename : `${filename}.pdf`;
+    pdf.save(safeName);
+  },
+
+  // Backward compatibility alias for A4 sheet export
+  async downloadA4SheetPdf(
+    containerElement: HTMLElement,
+    filename: string,
+    onProgress?: (current: number, total: number) => void
+  ): Promise<void> {
+    return this.downloadSheetPdf(containerElement, filename, 'A4', onProgress);
   },
 };

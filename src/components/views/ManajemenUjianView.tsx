@@ -21,6 +21,7 @@ import {
   Shuffle,
   Shield,
   Eye,
+  EyeOff,
   Sliders,
   X,
   Search,
@@ -124,6 +125,12 @@ export const ManajemenUjianView: React.FC<Props> = ({
 
   // Denah print settings
   const [selectedDenahRoomId, setSelectedDenahRoomId] = useState<string>(examRooms[0]?.id || '');
+
+  // Schedule print settings (A4 / F4, Legend toggle, Wet signature, Density)
+  const [schedulePaperSize, setSchedulePaperSize] = useState<'A4' | 'F4'>('A4');
+  const [showScheduleLegend, setShowScheduleLegend] = useState<boolean>(false);
+  const [scheduleSignatureMode, setScheduleSignatureMode] = useState<'wet' | 'digital'>('wet');
+  const [scheduleTableDensity, setScheduleTableDensity] = useState<'compact' | 'normal' | 'relaxed'>('normal');
 
   // Add room form
   const [roomFormData, setRoomFormData] = useState({
@@ -512,15 +519,15 @@ export const ManajemenUjianView: React.FC<Props> = ({
     showNotification('Inisial pengawas berhasil dibagikan otomatis ke seluruh ruang!');
   };
 
-  // Download Exam Schedule PDF
+  // Download Exam Schedule PDF (A4 or F4 Single Sheet)
   const handleDownloadSchedulePdf = async () => {
     if (!printScheduleContainerRef.current) return;
     setIsExporting(true);
-    setToastNotice('Sedang membuat file PDF Jadwal Ujian & Pengawas Ruang...');
+    setToastNotice(`Sedang membuat file PDF Jadwal Ujian (${schedulePaperSize} - Pas 1 Lembar)...`);
     try {
-      const safeTitle = `JADWAL_UJIAN_${examInfo.namaUjian.replace(/[^a-zA-Z0-9]/g, '_')}_MTS_MIFTAHUL_HUDA`;
-      await PrintService.downloadA4SheetPdf(printScheduleContainerRef.current, safeTitle);
-      setToastNotice('File PDF Jadwal Ujian berhasil diunduh!');
+      const safeTitle = `JADWAL_UJIAN_${schedulePaperSize}_${examInfo.namaUjian.replace(/[^a-zA-Z0-9]/g, '_')}_MTS_MIFTAHUL_HUDA`;
+      await PrintService.downloadSheetPdf(printScheduleContainerRef.current, safeTitle, schedulePaperSize);
+      setToastNotice(`File PDF Jadwal Ujian (${schedulePaperSize}) berhasil diunduh!`);
       setTimeout(() => setToastNotice(null), 3500);
     } catch (err: any) {
       alert('Gagal membuat PDF: ' + err.message);
@@ -1347,6 +1354,7 @@ export const ManajemenUjianView: React.FC<Props> = ({
         <DataGuruView
           teachers={teachers}
           examSchedule={examSchedule}
+          identity={identity}
           onSaveTeachers={onSaveTeachers}
           onNavigateToSchedule={() => setSubTab('jadwal')}
         />
@@ -1549,36 +1557,191 @@ export const ManajemenUjianView: React.FC<Props> = ({
             </div>
           </div>
 
-          {/* Live Print Preview Section */}
+          {/* Dynamic Print Media Style for Exact Page Size */}
+          <style>{`
+            @media print {
+              @page {
+                size: ${schedulePaperSize === 'F4' ? '215mm 330mm' : '210mm 297mm'} portrait !important;
+                margin: 0 !important;
+              }
+            }
+          `}</style>
+
+          {/* Live Print Preview Section & Advanced Print Optimization Toolbar */}
           <div className="bg-slate-200/80 p-4 sm:p-8 rounded-2xl border border-slate-300 flex flex-col items-center">
-            <div className="w-full max-w-4xl flex items-center justify-between mb-4 no-print">
-              <div>
-                <h3 className="text-sm font-bold text-slate-800">
-                  Pratinjau Lembar Cetak Jadwal Ujian & Pengawas
-                </h3>
-                <p className="text-xs text-slate-500">
-                  Format A4 standar siap cetak printer atau unduh PDF
-                </p>
+            {/* Control Panel Card (No-Print) */}
+            <div className="w-full max-w-4xl bg-white p-4 sm:p-5 rounded-2xl border border-slate-300 shadow-sm mb-6 no-print space-y-4">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 pb-3">
+                <div>
+                  <h3 className="text-sm font-black text-slate-900 flex items-center gap-2">
+                    <Printer className="w-4 h-4 text-emerald-700" />
+                    <span>Pengaturan & Pratinjau Cetak Jadwal Ujian</span>
+                  </h3>
+                  <p className="text-xs text-slate-500">
+                    Disesuaikan untuk kertas satu lembar tanpa terpotong (A4 / F4 Folio).
+                  </p>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => window.print()}
+                    className="px-3.5 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold flex items-center gap-1.5 cursor-pointer transition-all border border-slate-200"
+                  >
+                    <Printer className="w-4 h-4" />
+                    <span>Cetak ({schedulePaperSize})</span>
+                  </button>
+                  <button
+                    disabled={isExporting}
+                    onClick={handleDownloadSchedulePdf}
+                    className="px-4 py-2 rounded-xl bg-gradient-to-r from-emerald-800 to-teal-800 hover:from-emerald-900 hover:to-teal-900 text-white text-xs font-bold flex items-center gap-1.5 cursor-pointer shadow-md disabled:opacity-50 transition-all"
+                  >
+                    <FileDown className="w-4 h-4 text-amber-300" />
+                    <span>{isExporting ? 'Memproses...' : `Download PDF ${schedulePaperSize}`}</span>
+                  </button>
+                </div>
               </div>
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={() => window.print()}
-                  className="px-3.5 py-1.5 rounded-xl bg-white border border-slate-300 hover:bg-slate-50 text-slate-700 text-xs font-semibold flex items-center gap-1.5 cursor-pointer shadow-xs"
-                >
-                  <Printer className="w-3.5 h-3.5" />
-                  <span>Cetak Langsung</span>
-                </button>
-                <button
-                  disabled={isExporting}
-                  onClick={handleDownloadSchedulePdf}
-                  className="px-3.5 py-1.5 rounded-xl bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-bold flex items-center gap-1.5 cursor-pointer shadow-xs"
-                >
-                  <FileDown className="w-3.5 h-3.5 text-amber-300" />
-                  <span>Download PDF</span>
-                </button>
+
+              {/* Toolbar Controls Grid */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 text-xs">
+                {/* 1. Ukuran Kertas */}
+                <div className="bg-slate-50 p-3 rounded-xl border border-slate-200">
+                  <label className="block text-[11px] font-bold text-slate-700 uppercase tracking-wider mb-1.5">
+                    1. Ukuran Kertas:
+                  </label>
+                  <div className="grid grid-cols-2 gap-1.5">
+                    <button
+                      type="button"
+                      onClick={() => setSchedulePaperSize('A4')}
+                      className={`py-1.5 px-2 rounded-lg font-bold text-xs cursor-pointer border transition-all ${
+                        schedulePaperSize === 'A4'
+                          ? 'bg-emerald-800 text-white border-emerald-900 shadow-xs'
+                          : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-100'
+                      }`}
+                    >
+                      A4 (210×297)
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setSchedulePaperSize('F4')}
+                      className={`py-1.5 px-2 rounded-lg font-bold text-xs cursor-pointer border transition-all ${
+                        schedulePaperSize === 'F4'
+                          ? 'bg-emerald-800 text-white border-emerald-900 shadow-xs'
+                          : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-100'
+                      }`}
+                    >
+                      F4 / Folio (215×330)
+                    </button>
+                  </div>
+                </div>
+
+                {/* 2. Keterangan Inisial Guru */}
+                <div className="bg-slate-50 p-3 rounded-xl border border-slate-200">
+                  <label className="block text-[11px] font-bold text-slate-700 uppercase tracking-wider mb-1.5">
+                    2. Keterangan Inisial:
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => setShowScheduleLegend(!showScheduleLegend)}
+                    className={`w-full py-1.5 px-2 rounded-lg font-bold text-xs flex items-center justify-center gap-1.5 cursor-pointer border transition-all ${
+                      showScheduleLegend
+                        ? 'bg-amber-100 text-amber-950 border-amber-300'
+                        : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-100'
+                    }`}
+                    title={showScheduleLegend ? 'Klik untuk menghapus keterangan inisial agar hemat kertas' : 'Klik jika ruang kertas masih panjang untuk melihat daftar nama guru'}
+                  >
+                    {showScheduleLegend ? (
+                      <>
+                        <Eye className="w-3.5 h-3.5 text-amber-700" />
+                        <span>Keterangan Ditampilkan</span>
+                      </>
+                    ) : (
+                      <>
+                        <EyeOff className="w-3.5 h-3.5 text-slate-400" />
+                        <span>Inisial Saja (Hemat Kertas)</span>
+                      </>
+                    )}
+                  </button>
+                </div>
+
+                {/* 3. Tanda Tangan */}
+                <div className="bg-slate-50 p-3 rounded-xl border border-slate-200">
+                  <label className="block text-[11px] font-bold text-slate-700 uppercase tracking-wider mb-1.5">
+                    3. Format Tanda Tangan:
+                  </label>
+                  <div className="grid grid-cols-2 gap-1.5">
+                    <button
+                      type="button"
+                      onClick={() => setScheduleSignatureMode('wet')}
+                      className={`py-1.5 px-1 text-center rounded-lg font-bold text-[11px] cursor-pointer border transition-all ${
+                        scheduleSignatureMode === 'wet'
+                          ? 'bg-emerald-800 text-white border-emerald-900 shadow-xs'
+                          : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-100'
+                      }`}
+                      title="Ruang lapang untuk tanda tangan basah & stempel fisik madrasah"
+                    >
+                      TTD Basah (Lapang)
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setScheduleSignatureMode('digital')}
+                      className={`py-1.5 px-1 text-center rounded-lg font-bold text-[11px] cursor-pointer border transition-all ${
+                        scheduleSignatureMode === 'digital'
+                          ? 'bg-emerald-800 text-white border-emerald-900 shadow-xs'
+                          : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-100'
+                      }`}
+                      title="Gunakan tanda tangan digital jika telah diunggah di identitas madrasah"
+                    >
+                      TTD Digital
+                    </button>
+                  </div>
+                </div>
+
+                {/* 4. Kerapatan Baris Tabel */}
+                <div className="bg-slate-50 p-3 rounded-xl border border-slate-200">
+                  <label className="block text-[11px] font-bold text-slate-700 uppercase tracking-wider mb-1.5">
+                    4. Kerapatan Tabel:
+                  </label>
+                  <div className="grid grid-cols-3 gap-1">
+                    {(['compact', 'normal', 'relaxed'] as const).map((density) => (
+                      <button
+                        key={density}
+                        type="button"
+                        onClick={() => setScheduleTableDensity(density)}
+                        className={`py-1.5 text-center rounded-lg font-bold text-[10.5px] cursor-pointer border capitalize transition-all ${
+                          scheduleTableDensity === density
+                            ? 'bg-emerald-800 text-white border-emerald-900 shadow-xs'
+                            : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-100'
+                        }`}
+                      >
+                        {density === 'compact' ? 'Kompak' : density === 'normal' ? 'Normal' : 'Lega'}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+
+              {/* Status Note Banner */}
+              <div className="flex items-center gap-2 p-2.5 bg-emerald-50 rounded-xl border border-emerald-200 text-emerald-900 text-xs">
+                <CheckCircle2 className="w-4 h-4 text-emerald-700 flex-shrink-0" />
+                <div className="flex-1">
+                  <span className="font-bold">Hemat Kertas (1 Lembar Pas): </span>
+                  <span className="text-emerald-800">
+                    Jadwal, tabel pengawas, dan tanda tangan basah diatur proporsional sehingga dijamin pas di 1 lembar kertas ({schedulePaperSize}) tanpa terpotong.
+                  </span>
+                </div>
+                {!showScheduleLegend && (
+                  <button
+                    type="button"
+                    onClick={() => setShowScheduleLegend(true)}
+                    className="text-[11px] font-bold text-emerald-700 hover:text-emerald-900 underline cursor-pointer whitespace-nowrap ml-2"
+                  >
+                    + Tampilkan Nama Guru
+                  </button>
+                )}
               </div>
             </div>
 
+            {/* Print Output Wrapper */}
             <div ref={printScheduleContainerRef} className="shadow-2xl overflow-hidden rounded-md bg-white">
               <ExamSchedulePrint
                 identity={identity}
@@ -1586,6 +1749,10 @@ export const ManajemenUjianView: React.FC<Props> = ({
                 examRooms={examRooms}
                 examSchedule={examSchedule}
                 teachers={teachers}
+                paperSize={schedulePaperSize}
+                showLegend={showScheduleLegend}
+                signatureMode={scheduleSignatureMode}
+                tableDensity={scheduleTableDensity}
               />
             </div>
           </div>

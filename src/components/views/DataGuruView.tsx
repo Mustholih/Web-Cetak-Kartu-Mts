@@ -13,10 +13,16 @@ import {
   ShieldCheck,
   RefreshCw,
   Award,
+  Upload,
+  Download,
+  FileSpreadsheet,
+  FileDown,
 } from 'lucide-react';
-import { Teacher, ExamScheduleItem, ActiveTab } from '../../types';
+import { Teacher, ExamScheduleItem, ActiveTab, SchoolIdentity } from '../../types';
 import { StorageService } from '../../services/storage';
 import { DEFAULT_TEACHERS } from '../../services/defaultData';
+import { ExcelService } from '../../services/excelService';
+import { ImportGuruModal } from '../modals/ImportGuruModal';
 
 interface Props {
   teachers: Teacher[];
@@ -24,6 +30,7 @@ interface Props {
   onSaveTeachers: (teachers: Teacher[]) => void;
   onNavigateToSchedule?: () => void;
   setActiveTab?: (tab: ActiveTab) => void;
+  identity?: SchoolIdentity;
 }
 
 export const DataGuruView: React.FC<Props> = ({
@@ -32,9 +39,11 @@ export const DataGuruView: React.FC<Props> = ({
   onSaveTeachers,
   onNavigateToSchedule,
   setActiveTab,
+  identity,
 }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isImportModalOpen, setIsImportModalOpen] = useState(false);
   const [editingTeacher, setEditingTeacher] = useState<Teacher | null>(null);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
@@ -48,6 +57,38 @@ export const DataGuruView: React.FC<Props> = ({
   const showToast = (msg: string) => {
     setToastMessage(msg);
     setTimeout(() => setToastMessage(null), 3500);
+  };
+
+  const handleExportTeachers = () => {
+    try {
+      const schoolName = identity?.namaMadrasah || 'MTs Miftahul Huda';
+      ExcelService.exportTeachers(teachers, schoolName);
+      showToast(`Berhasil mengekspor ${teachers.length} data guru ke file Excel (.xlsx)!`);
+    } catch (e: any) {
+      alert('Gagal mengekspor data guru: ' + e.message);
+    }
+  };
+
+  const handleDownloadTemplate = () => {
+    try {
+      ExcelService.downloadTeacherTemplate();
+      showToast('Template Excel Guru berhasil diunduh.');
+    } catch (e: any) {
+      alert('Gagal mengunduh template: ' + e.message);
+    }
+  };
+
+  const handleImportComplete = (
+    importedTeachers: Omit<Teacher, 'id'>[],
+    mode: 'append' | 'replace'
+  ) => {
+    const updated = StorageService.importTeachers(importedTeachers, mode);
+    onSaveTeachers(updated);
+    showToast(
+      mode === 'replace'
+        ? `Berhasil memperbarui seluruh data dengan ${importedTeachers.length} guru!`
+        : `Berhasil mengimpor ${importedTeachers.length} data guru baru!`
+    );
   };
 
   // Helper to suggest 2-letter initials from name
@@ -227,14 +268,32 @@ export const DataGuruView: React.FC<Props> = ({
             </div>
           </div>
 
-          <div className="flex flex-wrap gap-2.5">
+          <div className="flex flex-wrap items-center gap-2.5">
             <button
               onClick={handleOpenAddModal}
-              className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-emerald-950 font-bold text-xs shadow-md transition-all cursor-pointer"
+              className="inline-flex items-center gap-2 px-3.5 py-2.5 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-emerald-950 font-bold text-xs shadow-md transition-all cursor-pointer"
             >
               <UserPlus className="w-4 h-4" />
               <span>Input Guru Baru</span>
             </button>
+
+            <button
+              onClick={() => setIsImportModalOpen(true)}
+              className="inline-flex items-center gap-2 px-3.5 py-2.5 rounded-xl bg-emerald-700 hover:bg-emerald-600 text-white font-bold text-xs shadow-md border border-emerald-500/50 transition-all cursor-pointer"
+            >
+              <Upload className="w-4 h-4 text-amber-300" />
+              <span>Import Excel</span>
+            </button>
+
+            <button
+              onClick={handleExportTeachers}
+              className="inline-flex items-center gap-2 px-3.5 py-2.5 rounded-xl bg-white/10 hover:bg-white/20 text-white font-semibold text-xs border border-white/20 transition-all cursor-pointer backdrop-blur-sm"
+              title="Unduh seluruh data guru ke format file Excel (.xlsx)"
+            >
+              <FileDown className="w-4 h-4 text-amber-300" />
+              <span>Export (.xlsx)</span>
+            </button>
+
             <button
               onClick={() => {
                 if (onNavigateToSchedule) {
@@ -243,10 +302,10 @@ export const DataGuruView: React.FC<Props> = ({
                   setActiveTab('manajemen-ujian');
                 }
               }}
-              className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-white/10 hover:bg-white/20 text-white font-semibold text-xs border border-white/20 transition-all cursor-pointer backdrop-blur-sm"
+              className="inline-flex items-center gap-2 px-3.5 py-2.5 rounded-xl bg-white/10 hover:bg-white/20 text-white font-semibold text-xs border border-white/20 transition-all cursor-pointer backdrop-blur-sm"
             >
               <Calendar className="w-4 h-4 text-amber-300" />
-              <span>Jadwal & Pengawas Ruang</span>
+              <span>Jadwal Ruang</span>
               <ArrowRight className="w-3.5 h-3.5" />
             </button>
           </div>
@@ -317,6 +376,33 @@ export const DataGuruView: React.FC<Props> = ({
                 className="w-full pl-9 pr-3 py-1.5 text-xs rounded-xl border border-slate-200 focus:outline-none focus:border-emerald-600 bg-slate-50"
               />
             </div>
+
+            <button
+              onClick={handleDownloadTemplate}
+              className="px-3 py-1.5 rounded-xl border border-slate-300 hover:bg-slate-50 text-slate-700 text-xs font-semibold flex items-center gap-1.5 cursor-pointer whitespace-nowrap transition-all shadow-2xs"
+              title="Download template Excel resmi untuk format input guru MTs"
+            >
+              <Download className="w-3.5 h-3.5 text-emerald-700" />
+              <span>Template</span>
+            </button>
+
+            <button
+              onClick={() => setIsImportModalOpen(true)}
+              className="px-3 py-1.5 rounded-xl bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-bold flex items-center gap-1.5 cursor-pointer whitespace-nowrap shadow-xs transition-all"
+              title="Upload daftar guru massal dari file Excel / CSV"
+            >
+              <Upload className="w-3.5 h-3.5 text-amber-300" />
+              <span>Import Excel</span>
+            </button>
+
+            <button
+              onClick={handleExportTeachers}
+              className="px-3 py-1.5 rounded-xl bg-white border border-slate-300 hover:bg-slate-50 text-slate-700 text-xs font-bold flex items-center gap-1.5 cursor-pointer whitespace-nowrap shadow-xs transition-all"
+              title="Download seluruh data guru ke format .xlsx"
+            >
+              <FileDown className="w-3.5 h-3.5 text-emerald-700" />
+              <span>Export (.xlsx)</span>
+            </button>
 
             <button
               onClick={handleResetDefaultTeachers}
@@ -573,6 +659,14 @@ export const DataGuruView: React.FC<Props> = ({
           </div>
         </div>
       )}
+
+      {/* Import Excel / CSV Modal for Teachers */}
+      <ImportGuruModal
+        isOpen={isImportModalOpen}
+        onClose={() => setIsImportModalOpen(false)}
+        existingTeachers={teachers}
+        onImportComplete={handleImportComplete}
+      />
     </div>
   );
 };

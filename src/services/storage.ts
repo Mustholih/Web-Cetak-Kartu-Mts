@@ -365,6 +365,18 @@ export const StorageService = {
     return false;
   },
 
+  importTeachers(newTeachers: Omit<Teacher, 'id'>[], mode: 'append' | 'replace' = 'append'): Teacher[] {
+    const existing = mode === 'replace' ? [] : this.getTeachers();
+    const created: Teacher[] = newTeachers.map((t, idx) => ({
+      ...t,
+      id: `t-${Date.now()}-${idx}-${Math.floor(Math.random() * 1000)}`,
+    }));
+
+    const result = [...existing, ...created];
+    this.saveTeachers(result);
+    return result;
+  },
+
   // Intelligent Automatic Student Room & Desk Distribution
   autoAllocateStudents(
     students: Student[],

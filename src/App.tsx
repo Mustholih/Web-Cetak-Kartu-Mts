@@ -464,6 +464,7 @@ export default function App() {
               <DataGuruView
                 teachers={teachers}
                 examSchedule={examSchedule}
+                identity={identity}
                 onSaveTeachers={handleSaveTeachers}
                 onNavigateToSchedule={() => setActiveTab('manajemen-ujian')}
                 setActiveTab={setActiveTab}
