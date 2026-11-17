@@ -32,6 +32,8 @@ import {
   Check,
   RotateCcw,
   FileText,
+  Upload,
+  ArrowLeftRight,
 } from 'lucide-react';
 import {
   Student,
@@ -43,7 +45,7 @@ import {
   Teacher,
 } from '../../types';
 import { ExamCardItem } from '../cards/ExamCardItem';
-import { ExamRoomLayoutPrint } from '../exam/ExamRoomLayoutPrint';
+import { ExamRoomLayoutPrint, DeskSlotSelection } from '../exam/ExamRoomLayoutPrint';
 import { ExamAttendancePrint } from '../exam/ExamAttendancePrint';
 import { ExamSchedulePrint } from '../exam/ExamSchedulePrint';
 import { DataGuruView } from './DataGuruView';
@@ -96,13 +98,17 @@ export const ManajemenUjianView: React.FC<Props> = ({
   const [isMoveStudentModalOpen, setIsMoveStudentModalOpen] = useState(false);
   const [movingStudentAllocation, setMovingStudentAllocation] = useState<ExamAllocation | null>(null);
   const [selectedTargetRoomId, setSelectedTargetRoomId] = useState<string>('');
+  const [selectedTargetDesk, setSelectedTargetDesk] = useState<number>(1);
+  const [selectedTargetSide, setSelectedTargetSide] = useState<'Kiri' | 'Kanan'>('Kiri');
   const [isScheduleSignModalOpen, setIsScheduleSignModalOpen] = useState(false);
   const [isAddScheduleModalOpen, setIsAddScheduleModalOpen] = useState(false);
 
-  // Auto-allocate modal settings
+  // Auto-allocate modal settings (Default: 5 rooms x 30 seats = 3x5 desks x 2 students/desk)
   const [autoMode, setAutoMode] = useState<'by_class' | 'cross_class' | 'alphabetical' | 'by_nis'>('cross_class');
   const [autoPrefix, setAutoPrefix] = useState<string>(examInfo.nomorPesertaPrefix || '02-15-023-');
-  const [autoCapacity, setAutoCapacity] = useState<number>(20);
+  const [autoCapacity, setAutoCapacity] = useState<number>(30);
+  const [autoUseFiveRoomsPreset, setAutoUseFiveRoomsPreset] = useState<boolean>(examRooms.length !== 5);
+  const [autoDistributeEvenly, setAutoDistributeEvenly] = useState<boolean>(true);
 
   // Exam card print filters
   const [cardFilterMode, setCardFilterMode] = useState<'all' | 'room' | 'class'>('all');
@@ -123,8 +129,12 @@ export const ManajemenUjianView: React.FC<Props> = ({
     examSchedule[0]?.jam || '07.30 - 09.30 WIB'
   );
 
-  // Denah print settings
+  // Denah print & interactive placement settings
   const [selectedDenahRoomId, setSelectedDenahRoomId] = useState<string>(examRooms[0]?.id || '');
+  const [denahPaperSize, setDenahPaperSize] = useState<'A4' | 'F4'>('A4');
+  const [denahPrintScope, setDenahPrintScope] = useState<'single' | 'all'>('single');
+  const [denahEditMode, setDenahEditMode] = useState<boolean>(false);
+  const [selectedDeskSlot, setSelectedDeskSlot] = useState<DeskSlotSelection | null>(null);
 
   // Schedule print settings (A4 / F4, Legend toggle, Wet signature, Density)
   const [schedulePaperSize, setSchedulePaperSize] = useState<'A4' | 'F4'>('A4');
@@ -136,8 +146,9 @@ export const ManajemenUjianView: React.FC<Props> = ({
   const [roomFormData, setRoomFormData] = useState({
     nomorRuang: '',
     namaRuang: '',
-    kapasitas: 20,
-    kolomMeja: 4,
+    kapasitas: 30,
+    kolomMeja: 3,
+    siswaPerMeja: 2,
     pengawas1: '',
     pengawas2: '',
   });
@@ -153,6 +164,7 @@ export const ManajemenUjianView: React.FC<Props> = ({
     ketuaPanitiaNama: examInfo.ketuaPanitiaNama || 'H. AHMAD RIFA\'I, S.Pd.I.',
     ketuaPanitiaNip: examInfo.ketuaPanitiaNip || '198402122009011015',
     tempatTanggalJadwal: examInfo.tempatTanggalJadwal || `${identity.kotaPenerbitan || 'Tabir Selatan'}, 25 November 2026`,
+    ketuaPanitiaTtdUrl: examInfo.ketuaPanitiaTtdUrl || '',
   });
 
   const printCardsContainerRef = useRef<HTMLDivElement>(null);
@@ -189,7 +201,11 @@ export const ManajemenUjianView: React.FC<Props> = ({
     () =>
       examAllocations
         .filter((a) => a.roomId === (activeRoom?.id || ''))
-        .sort((a, b) => a.nomorMeja - b.nomorMeja),
+        .sort((a, b) => {
+          if (a.nomorMeja !== b.nomorMeja) return a.nomorMeja - b.nomorMeja;
+          if (a.posisiKursi === b.posisiKursi) return 0;
+          return a.posisiKursi === 'Kiri' ? -1 : 1;
+        }),
     [examAllocations, activeRoom]
   );
 
@@ -200,33 +216,85 @@ export const ManajemenUjianView: React.FC<Props> = ({
     return Array.from(set).sort();
   }, [students]);
 
-  // Execute Auto Allocation
-  const handleExecuteAutoAllocate = () => {
-    if (examRooms.length === 0) {
-      alert('Tambahkan minimal satu ruang ujian terlebih dahulu.');
+  // Apply 5 Standard Rooms (3 desks horizontal x 5 rows vertical x 2 students/desk = 30 capacity/room)
+  const handleApplyFiveRoomsFormat = () => {
+    if (
+      examRooms.length > 0 &&
+      !window.confirm(
+        'Terapkan format standar 5 Ruang Ujian (3 meja ke samping × 5 baris ke belakang, 2 siswa/meja = kapasitas 30 siswa/ruang)?'
+      )
+    ) {
       return;
     }
+    const fiveRooms = StorageService.createStandardFiveRooms(examRooms);
+    onSaveExamRooms(fiveRooms);
+    setActiveRoomId(fiveRooms[0].id);
+    setSelectedDenahRoomId(fiveRooms[0].id);
+    setSelectedAttendanceRoomId(fiveRooms[0].id);
+    setAutoUseFiveRoomsPreset(false);
 
-    // Update room capacities if requested
-    const updatedRooms = examRooms.map((r) => ({
-      ...r,
-      kapasitas: autoCapacity,
-      barisMeja: Math.ceil(autoCapacity / (r.kolomMeja || 4)),
-    }));
-    onSaveExamRooms(updatedRooms);
+    // Automatically re-distribute students cleanly into the 5 rooms so none are stranded
+    const newAllocations = StorageService.autoAllocateStudents(
+      students,
+      fiveRooms,
+      autoMode,
+      examInfo.nomorPesertaPrefix || autoPrefix,
+      true
+    );
+    onSaveExamAllocations(newAllocations);
+    showNotification(
+      `Format 5 Ruang (3×5 meja, 30 siswa/ruang) diterapkan dan ${newAllocations.length} siswa telah ditempatkan!`
+    );
+  };
+
+  // Execute Auto Allocation
+  const handleExecuteAutoAllocate = () => {
+    let targetRooms = examRooms;
+    if (autoUseFiveRoomsPreset || targetRooms.length === 0) {
+      targetRooms = StorageService.createStandardFiveRooms(examRooms).map((r) => ({
+        ...r,
+        kapasitas: autoCapacity,
+        kolomMeja: 3,
+        siswaPerMeja: 2,
+        barisMeja: Math.ceil(Math.ceil(autoCapacity / 2) / 3),
+      }));
+    } else {
+      targetRooms = examRooms.map((r) => {
+        const perDesk = r.siswaPerMeja || 2;
+        const cols = r.kolomMeja || 3;
+        const totalDesks = Math.ceil(autoCapacity / perDesk);
+        return {
+          ...r,
+          kapasitas: autoCapacity,
+          kolomMeja: cols,
+          siswaPerMeja: perDesk,
+          barisMeja: Math.ceil(totalDesks / cols),
+        };
+      });
+    }
+
+    onSaveExamRooms(targetRooms);
+    if (!targetRooms.some((r) => r.id === activeRoomId)) {
+      setActiveRoomId(targetRooms[0].id);
+    }
+    if (!targetRooms.some((r) => r.id === selectedDenahRoomId)) {
+      setSelectedDenahRoomId(targetRooms[0].id);
+    }
+    setAutoUseFiveRoomsPreset(false);
 
     // Run auto distribution
     const newAllocations = StorageService.autoAllocateStudents(
       students,
-      updatedRooms,
+      targetRooms,
       autoMode,
-      autoPrefix
+      autoPrefix,
+      autoDistributeEvenly
     );
 
     onSaveExamAllocations(newAllocations);
     setIsAutoAllocateModalOpen(false);
     showNotification(
-      `Berhasil membagi ${newAllocations.length} siswa ke dalam ${updatedRooms.length} ruang ujian!`
+      `Berhasil membagi ${newAllocations.length} siswa dari ${distinctClasses.length} rombel ke dalam ${targetRooms.length} ruang ujian!`
     );
   };
 
@@ -237,8 +305,9 @@ export const ManajemenUjianView: React.FC<Props> = ({
     setRoomFormData({
       nomorRuang: `Ruang ${String(nextNum).padStart(2, '0')}`,
       namaRuang: `Gedung Kelas ${nextNum}`,
-      kapasitas: 20,
-      kolomMeja: 4,
+      kapasitas: 30,
+      kolomMeja: 3,
+      siswaPerMeja: 2,
       pengawas1: '',
       pengawas2: '',
     });
@@ -251,7 +320,8 @@ export const ManajemenUjianView: React.FC<Props> = ({
       nomorRuang: room.nomorRuang,
       namaRuang: room.namaRuang,
       kapasitas: room.kapasitas,
-      kolomMeja: room.kolomMeja || 4,
+      kolomMeja: room.kolomMeja || 3,
+      siswaPerMeja: room.siswaPerMeja || 2,
       pengawas1: room.pengawas1 || '',
       pengawas2: room.pengawas2 || '',
     });
@@ -262,13 +332,17 @@ export const ManajemenUjianView: React.FC<Props> = ({
     e.preventDefault();
     if (!roomFormData.nomorRuang.trim()) return;
 
+    const perDesk = roomFormData.siswaPerMeja || 2;
+    const totalDesks = Math.ceil(roomFormData.kapasitas / perDesk);
+    const computedRows = Math.ceil(totalDesks / (roomFormData.kolomMeja || 3));
+
     if (editingRoom) {
       const updated = examRooms.map((r) =>
         r.id === editingRoom.id
           ? {
               ...r,
               ...roomFormData,
-              barisMeja: Math.ceil(roomFormData.kapasitas / roomFormData.kolomMeja),
+              barisMeja: computedRows,
             }
           : r
       );
@@ -278,7 +352,7 @@ export const ManajemenUjianView: React.FC<Props> = ({
       const newRoom: ExamRoom = {
         id: `room-${Date.now()}`,
         ...roomFormData,
-        barisMeja: Math.ceil(roomFormData.kapasitas / roomFormData.kolomMeja),
+        barisMeja: computedRows,
       };
       const updated = [...examRooms, newRoom];
       onSaveExamRooms(updated);
@@ -307,17 +381,47 @@ export const ManajemenUjianView: React.FC<Props> = ({
     }
   };
 
+  // Helper to find first open (desk, side) in a room
+  const findFirstOpenSeat = (
+    room: ExamRoom,
+    currentAllocs: ExamAllocation[]
+  ): { desk: number; side?: 'Kiri' | 'Kanan' } | null => {
+    const roomAllocs = currentAllocs.filter((a) => a.roomId === room.id);
+    const perDesk = room.siswaPerMeja || 2;
+    const totalDesks = Math.ceil((room.kapasitas || 30) / perDesk);
+
+    if (perDesk === 2) {
+      for (let d = 1; d <= totalDesks; d++) {
+        const hasKiri = roomAllocs.some(
+          (a) => a.nomorMeja === d && (a.posisiKursi === 'Kiri' || !a.posisiKursi)
+        );
+        if (!hasKiri) return { desk: d, side: 'Kiri' };
+        const hasKanan = roomAllocs.some(
+          (a) => a.nomorMeja === d && a.posisiKursi === 'Kanan'
+        );
+        if (!hasKanan) return { desk: d, side: 'Kanan' };
+      }
+      return null;
+    } else {
+      const taken = new Set(roomAllocs.map((a) => a.nomorMeja));
+      for (let d = 1; d <= (room.kapasitas || 30); d++) {
+        if (!taken.has(d)) return { desk: d };
+      }
+      return null;
+    }
+  };
+
   // Add individual student to room
   const handleAddStudentToRoom = (studentId: string) => {
     if (!activeRoom) return;
-    const currentSeats = activeRoomAllocations.map((a) => a.nomorMeja);
-    let nextSeat = 1;
-    while (currentSeats.includes(nextSeat)) {
-      nextSeat++;
+    if (examAllocations.some((a) => a.studentId === studentId)) {
+      alert('Siswa ini sudah memiliki penempatan ruang ujian.');
+      return;
     }
 
-    if (nextSeat > activeRoom.kapasitas) {
-      alert(`Kapasitas ${activeRoom.nomorRuang} (${activeRoom.kapasitas} meja) sudah penuh.`);
+    const openSeat = findFirstOpenSeat(activeRoom, examAllocations);
+    if (!openSeat) {
+      alert(`Kapasitas ${activeRoom.nomorRuang} (${activeRoom.kapasitas} siswa) sudah penuh.`);
       return;
     }
 
@@ -330,19 +434,32 @@ export const ManajemenUjianView: React.FC<Props> = ({
       studentId,
       roomId: activeRoom.id,
       nomorPeserta,
-      nomorMeja: nextSeat,
+      nomorMeja: openSeat.desk,
+      posisiKursi: openSeat.side,
       isCardPrinted: false,
     };
 
     const updated = [...examAllocations, newAllocation];
     onSaveExamAllocations(updated);
-    showNotification(`Siswa berhasil ditambahkan ke ${activeRoom.nomorRuang} (Meja ${nextSeat})`);
+    showNotification(
+      `Siswa berhasil ditambahkan ke ${activeRoom.nomorRuang} (Meja ${String(openSeat.desk).padStart(2, '0')}${openSeat.side ? ` - ${openSeat.side}` : ''})`
+    );
   };
 
-  // Move student to another room
+  // Move / Swap student to another room or desk
   const handleOpenMoveModal = (allocation: ExamAllocation) => {
     setMovingStudentAllocation(allocation);
-    setSelectedTargetRoomId(examRooms.find((r) => r.id !== allocation.roomId)?.id || '');
+    const defaultTargetRoomId = allocation.roomId || examRooms[0]?.id || '';
+    setSelectedTargetRoomId(defaultTargetRoomId);
+    const targetRoom = roomMap.get(defaultTargetRoomId);
+    if (targetRoom) {
+      const open = findFirstOpenSeat(targetRoom, examAllocations);
+      setSelectedTargetDesk(open?.desk || allocation.nomorMeja || 1);
+      setSelectedTargetSide(open?.side || allocation.posisiKursi || 'Kiri');
+    } else {
+      setSelectedTargetDesk(allocation.nomorMeja || 1);
+      setSelectedTargetSide(allocation.posisiKursi || 'Kiri');
+    }
     setIsMoveStudentModalOpen(true);
   };
 
@@ -351,32 +468,147 @@ export const ManajemenUjianView: React.FC<Props> = ({
     const targetRoom = roomMap.get(selectedTargetRoomId);
     if (!targetRoom) return;
 
-    // Check available seat in target room
-    const targetSeats = examAllocations
-      .filter((a) => a.roomId === selectedTargetRoomId)
-      .map((a) => a.nomorMeja);
+    const perDesk = targetRoom.siswaPerMeja || 2;
+    const desiredSide = perDesk === 2 ? selectedTargetSide : undefined;
 
-    let nextSeat = 1;
-    while (targetSeats.includes(nextSeat)) {
-      nextSeat++;
-    }
-
-    if (nextSeat > targetRoom.kapasitas) {
-      alert(`Ruang tujuan (${targetRoom.nomorRuang}) sudah penuh.`);
-      return;
-    }
-
-    const updated = examAllocations.map((a) =>
-      a.id === movingStudentAllocation.id
-        ? { ...a, roomId: selectedTargetRoomId, nomorMeja: nextSeat }
-        : a
+    // Check if target slot is already occupied by another student
+    const occupant = examAllocations.find(
+      (a) =>
+        a.id !== movingStudentAllocation.id &&
+        a.roomId === selectedTargetRoomId &&
+        a.nomorMeja === selectedTargetDesk &&
+        (perDesk !== 2 || (a.posisiKursi || 'Kiri') === desiredSide)
     );
+
+    let updated: ExamAllocation[];
+    if (occupant) {
+      // Swap positions cleanly between the two students!
+      updated = examAllocations.map((a) => {
+        if (a.id === movingStudentAllocation.id) {
+          return {
+            ...a,
+            roomId: selectedTargetRoomId,
+            nomorMeja: selectedTargetDesk,
+            posisiKursi: desiredSide,
+          };
+        }
+        if (a.id === occupant.id) {
+          return {
+            ...a,
+            roomId: movingStudentAllocation.roomId,
+            nomorMeja: movingStudentAllocation.nomorMeja,
+            posisiKursi: movingStudentAllocation.posisiKursi,
+          };
+        }
+        return a;
+      });
+      const occupantName = studentMap.get(occupant.studentId)?.nama || 'siswa lain';
+      showNotification(
+        `Posisi berhasil ditukar dengan ${occupantName} di ${targetRoom.nomorRuang} (Meja ${String(selectedTargetDesk).padStart(2, '0')}${desiredSide ? ` - ${desiredSide}` : ''})!`
+      );
+    } else {
+      updated = examAllocations.map((a) =>
+        a.id === movingStudentAllocation.id
+          ? {
+              ...a,
+              roomId: selectedTargetRoomId,
+              nomorMeja: selectedTargetDesk,
+              posisiKursi: desiredSide,
+            }
+          : a
+      );
+      showNotification(
+        `Siswa dipindahkan ke ${targetRoom.nomorRuang} (Meja ${String(selectedTargetDesk).padStart(2, '0')}${desiredSide ? ` - ${desiredSide}` : ''}). Kartu ujian & denah otomatis diperbarui!`
+      );
+    }
 
     onSaveExamAllocations(updated);
     setIsMoveStudentModalOpen(false);
-    showNotification(
-      `Siswa berhasil dipindahkan ke ${targetRoom.nomorRuang} (Meja ${nextSeat}). Data identitas dan kartu ujian otomatis disinkronkan!`
-    );
+  };
+
+  // Interactive click-to-swap/move handler on Denah Tempat Duduk
+  const handleDenahSlotClick = (
+    roomId: string,
+    deskNum: number,
+    side: 'Kiri' | 'Kanan',
+    clickedAllocation?: ExamAllocation
+  ) => {
+    if (!denahEditMode) return;
+
+    if (!selectedDeskSlot) {
+      if (!clickedAllocation) {
+        showNotification('Pilih siswa terlebih dahulu untuk dipindahkan ke kursi ini.');
+        return;
+      }
+      setSelectedDeskSlot({ roomId, deskNum, side, allocation: clickedAllocation });
+      return;
+    }
+
+    // Clicking same seat cancels selection
+    if (
+      selectedDeskSlot.roomId === roomId &&
+      selectedDeskSlot.deskNum === deskNum &&
+      selectedDeskSlot.side === side
+    ) {
+      setSelectedDeskSlot(null);
+      return;
+    }
+
+    const sourceAlloc = selectedDeskSlot.allocation;
+    if (!sourceAlloc) {
+      setSelectedDeskSlot(null);
+      return;
+    }
+
+    const targetRoom = roomMap.get(roomId);
+    const perDesk = targetRoom?.siswaPerMeja || 2;
+    const targetSide = perDesk === 2 ? side : undefined;
+
+    let updated: ExamAllocation[];
+    if (clickedAllocation) {
+      // Swap two students
+      updated = examAllocations.map((a) => {
+        if (a.id === sourceAlloc.id) {
+          return {
+            ...a,
+            roomId,
+            nomorMeja: deskNum,
+            posisiKursi: targetSide,
+          };
+        }
+        if (a.id === clickedAllocation.id) {
+          return {
+            ...a,
+            roomId: sourceAlloc.roomId,
+            nomorMeja: sourceAlloc.nomorMeja,
+            posisiKursi: sourceAlloc.posisiKursi,
+          };
+        }
+        return a;
+      });
+      const n1 = studentMap.get(sourceAlloc.studentId)?.nama || 'Siswa 1';
+      const n2 = studentMap.get(clickedAllocation.studentId)?.nama || 'Siswa 2';
+      showNotification(`Berhasil menukar tempat duduk ${n1} ⇄ ${n2}!`);
+    } else {
+      // Move source student into empty seat
+      updated = examAllocations.map((a) =>
+        a.id === sourceAlloc.id
+          ? {
+              ...a,
+              roomId,
+              nomorMeja: deskNum,
+              posisiKursi: targetSide,
+            }
+          : a
+      );
+      const n1 = studentMap.get(sourceAlloc.studentId)?.nama || 'Siswa';
+      showNotification(
+        `${n1} dipindahkan ke Meja ${String(deskNum).padStart(2, '0')} (${side})!`
+      );
+    }
+
+    onSaveExamAllocations(updated);
+    setSelectedDeskSlot(null);
   };
 
   // Remove student from room
@@ -441,18 +673,31 @@ export const ManajemenUjianView: React.FC<Props> = ({
     }
   };
 
-  // Export Denah PDF
+  // Export Denah PDF (Supports Landscape A4 & F4, Single Room or All Rooms)
   const handleExportDenahPdf = async () => {
     if (!printDenahContainerRef.current) return;
     const room = roomMap.get(selectedDenahRoomId) || examRooms[0];
     setIsExporting(true);
-    setToastNotice(`Sedang membuat PDF Denah Tempat Duduk ${room.nomorRuang}...`);
+    const label =
+      denahPrintScope === 'all'
+        ? `Semua Ruang (${examRooms.length} Hal ${denahPaperSize} Landscape)`
+        : `${room.nomorRuang} (${denahPaperSize} Landscape)`;
+    setToastNotice(`Sedang membuat PDF Denah Tempat Duduk ${label}...`);
     try {
-      await PrintService.downloadA4SheetPdf(
+      const fileTitle =
+        denahPrintScope === 'all'
+          ? `Denah_Tempat_Duduk_Semua_Ruang_${denahPaperSize}_Landscape_${examInfo.tahunPelajaran.replace('/', '-')}`
+          : `Denah_Tempat_Duduk_${room.nomorRuang.replace(/\s+/g, '_')}_${denahPaperSize}_Landscape_${examInfo.tahunPelajaran.replace('/', '-')}`;
+      await PrintService.downloadSheetPdf(
         printDenahContainerRef.current,
-        `Denah_Tempat_Duduk_${room.nomorRuang.replace(/\s+/g, '_')}_${examInfo.tahunPelajaran.replace('/', '-')}`
+        fileTitle,
+        denahPaperSize,
+        (cur, total) => {
+          setToastNotice(`Merender denah ruang ${cur} dari ${total}...`);
+        },
+        'landscape'
       );
-      setToastNotice('File PDF Denah Tempat Duduk berhasil diunduh!');
+      setToastNotice(`File PDF Denah (${denahPaperSize} Landscape) berhasil diunduh!`);
       setTimeout(() => setToastNotice(null), 4000);
     } catch (e: any) {
       alert(`Gagal membuat PDF: ${e.message}`);
@@ -536,6 +781,22 @@ export const ManajemenUjianView: React.FC<Props> = ({
     }
   };
 
+  // Upload Ketua Panitia digital signature image
+  const handleUploadPanitiaTtd = (file: File, target: 'examInfo' | 'modal') => {
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      const dataUrl = ev.target?.result as string;
+      if (!dataUrl) return;
+      if (target === 'examInfo') {
+        onSaveExamInfo({ ...examInfo, ketuaPanitiaTtdUrl: dataUrl });
+        showNotification('Tanda tangan Ketua Panitia Pelaksana Ujian berhasil disimpan!');
+      } else {
+        setPanitiaFormData((prev) => ({ ...prev, ketuaPanitiaTtdUrl: dataUrl }));
+      }
+    };
+    reader.readAsDataURL(file);
+  };
+
   // Save Panitia and Signatures Configuration
   const handleSavePanitiaInfo = () => {
     const updated = {
@@ -543,10 +804,11 @@ export const ManajemenUjianView: React.FC<Props> = ({
       ketuaPanitiaNama: panitiaFormData.ketuaPanitiaNama.trim(),
       ketuaPanitiaNip: panitiaFormData.ketuaPanitiaNip.trim(),
       tempatTanggalJadwal: panitiaFormData.tempatTanggalJadwal.trim(),
+      ketuaPanitiaTtdUrl: panitiaFormData.ketuaPanitiaTtdUrl,
     };
     onSaveExamInfo(updated);
     setIsScheduleSignModalOpen(false);
-    showNotification('Pengaturan panitia ujian & tanda tangan berhasil diperbarui!');
+    showNotification('Pengaturan Ketua Panitia Pelaksana Ujian & tanda tangan berhasil diperbarui!');
   };
 
   // Add Schedule Item
@@ -720,6 +982,14 @@ export const ManajemenUjianView: React.FC<Props> = ({
 
             <div className="flex items-center gap-2 flex-wrap">
               <button
+                onClick={handleApplyFiveRoomsFormat}
+                className="px-3.5 py-2 rounded-xl border border-emerald-300 bg-emerald-50 hover:bg-emerald-100 text-emerald-900 text-xs font-bold flex items-center gap-1.5 shadow-xs transition-all cursor-pointer"
+                title="Atur otomatis menjadi 5 Ruang (masing-masing 3 meja × 5 baris × 2 siswa = 30 siswa)"
+              >
+                <Grid className="w-4 h-4 text-emerald-700" />
+                <span>Format 5 Ruang (3×5 Meja, 30 Siswa)</span>
+              </button>
+              <button
                 onClick={() => setIsAutoAllocateModalOpen(true)}
                 className="px-4 py-2 rounded-xl bg-gradient-to-r from-emerald-700 to-teal-700 hover:from-emerald-800 hover:to-teal-800 text-white text-xs font-bold flex items-center gap-2 shadow-sm transition-all cursor-pointer"
               >
@@ -737,11 +1007,14 @@ export const ManajemenUjianView: React.FC<Props> = ({
           </div>
 
           {/* Room Cards Row */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3.5">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-3.5">
             {examRooms.map((room) => {
               const count = examAllocations.filter((a) => a.roomId === room.id).length;
               const isSelected = activeRoom?.id === room.id;
-              const percent = Math.min(100, Math.round((count / (room.kapasitas || 20)) * 100));
+              const percent = Math.min(100, Math.round((count / (room.kapasitas || 30)) * 100));
+              const cols = room.kolomMeja || 3;
+              const rows = room.barisMeja || 5;
+              const perDesk = room.siswaPerMeja || 2;
 
               return (
                 <div
@@ -791,7 +1064,10 @@ export const ManajemenUjianView: React.FC<Props> = ({
                     <h4 className="text-xs font-bold text-slate-900 truncate">
                       {room.namaRuang}
                     </h4>
-                    <p className="text-[11px] text-slate-500 mt-0.5">
+                    <p className="text-[11px] text-emerald-800 font-semibold mt-0.5">
+                      {cols}×{rows} Meja ({perDesk} siswa/meja)
+                    </p>
+                    <p className="text-[11px] text-slate-500 mt-0.5 truncate">
                       Pengawas: {room.pengawas1 || 'Belum diisi'}
                     </p>
                   </div>
@@ -829,7 +1105,7 @@ export const ManajemenUjianView: React.FC<Props> = ({
                       </span>
                     </h3>
                     <p className="text-xs text-slate-500">
-                      Lokasi: {activeRoom.namaRuang} • Kapasitas: {activeRoom.kapasitas} Meja
+                      Lokasi: {activeRoom.namaRuang} • Susunan: {activeRoom.kolomMeja || 3}×{activeRoom.barisMeja || 5} Meja ({activeRoom.siswaPerMeja || 2} siswa/meja • Maks {activeRoom.kapasitas} Siswa)
                     </p>
                   </div>
 
@@ -862,7 +1138,7 @@ export const ManajemenUjianView: React.FC<Props> = ({
                   <table className="w-full text-left text-xs border-collapse">
                     <thead className="bg-slate-50 border-b border-slate-200 text-slate-700 font-bold uppercase text-[11px]">
                       <tr>
-                        <th className="py-2.5 px-3 w-12 text-center">Meja</th>
+                        <th className="py-2.5 px-3 w-20 text-center">Meja</th>
                         <th className="py-2.5 px-3 w-28">No. Peserta</th>
                         <th className="py-2.5 px-4">Nama Siswa</th>
                         <th className="py-2.5 px-3 text-center">Kelas</th>
@@ -880,11 +1156,18 @@ export const ManajemenUjianView: React.FC<Props> = ({
                       ) : (
                         activeRoomAllocations.map((alloc) => {
                           const std = studentMap.get(alloc.studentId);
+                          const seatBadge =
+                            alloc.posisiKursi === 'Kanan'
+                              ? 'B'
+                              : alloc.posisiKursi === 'Kiri'
+                              ? 'A'
+                              : '';
                           return (
                             <tr key={alloc.id} className="hover:bg-slate-50">
                               <td className="py-2 px-3 text-center font-black">
-                                <span className="w-7 h-7 mx-auto rounded-full bg-emerald-100 text-emerald-900 flex items-center justify-center text-xs">
-                                  {alloc.nomorMeja}
+                                <span className="inline-flex items-center justify-center px-2 py-1 rounded-full bg-emerald-100 text-emerald-900 text-[11px] font-extrabold whitespace-nowrap">
+                                  {String(alloc.nomorMeja).padStart(2, '0')}
+                                  {seatBadge ? ` (${seatBadge})` : ''}
                                 </span>
                               </td>
                               <td className="py-2 px-3 font-mono font-bold text-emerald-950">
@@ -987,32 +1270,68 @@ export const ManajemenUjianView: React.FC<Props> = ({
       {subTab === 'kartu' && (
         <div className="space-y-5">
           {/* Controls Bar */}
-          <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs flex flex-col md:flex-row items-start md:items-center justify-between gap-4 no-print">
-            <div className="space-y-1">
-              <h3 className="text-sm font-bold text-slate-900">Pengaturan Cetak Kartu Ujian</h3>
-              <p className="text-xs text-slate-500">
-                Kartu memuat Nama, NIS/NISN, Kelas, Foto, Ruang Ujian, Nomor Meja, dan Tanda Tangan Kepala Madrasah.
-              </p>
+          <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs space-y-3 no-print">
+            <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+              <div className="space-y-1">
+                <h3 className="text-sm font-bold text-slate-900">Pengaturan Cetak Kartu Ujian</h3>
+                <p className="text-xs text-slate-500">
+                  Kartu memuat Nama, NIS/NISN, Kelas, Foto, Ruang Ujian, Meja &amp; Posisi Duduk, serta Tanda Tangan &amp; Stempel Resmi <strong>Ketua Panitia Pelaksana Ujian MTs Miftahul Huda</strong>.
+                </p>
+              </div>
+
+              {/* Actions */}
+              <div className="flex items-center gap-2 flex-wrap">
+                <button
+                  onClick={() => {
+                    setPanitiaFormData({
+                      ketuaPanitiaNama: examInfo.ketuaPanitiaNama || 'H. AHMAD RIFA\'I, S.Pd.I.',
+                      ketuaPanitiaNip: examInfo.ketuaPanitiaNip || '198402122009011015',
+                      tempatTanggalJadwal:
+                        examInfo.tempatTanggalJadwal ||
+                        `${identity.kotaPenerbitan || 'Tabir Selatan'}, 25 November 2026`,
+                      ketuaPanitiaTtdUrl: examInfo.ketuaPanitiaTtdUrl || '',
+                    });
+                    setIsScheduleSignModalOpen(true);
+                  }}
+                  className="px-3.5 py-2 rounded-xl border border-emerald-300 bg-emerald-50 hover:bg-emerald-100 text-emerald-900 text-xs font-bold flex items-center gap-1.5 cursor-pointer"
+                >
+                  <Shield className="w-4 h-4 text-emerald-700" />
+                  <span>Atur Ketua Panitia &amp; TTD</span>
+                </button>
+                <button
+                  onClick={handleExportCardsPdf}
+                  disabled={isExporting || targetExamCardStudents.length === 0}
+                  className="px-4 py-2 rounded-xl bg-emerald-800 hover:bg-emerald-900 text-white text-xs font-bold flex items-center gap-2 shadow-sm transition-all cursor-pointer"
+                >
+                  <FileDown className="w-4 h-4 text-emerald-300" />
+                  <span>Download PDF A4 ({examCardPages.length} Hal)</span>
+                </button>
+                <button
+                  onClick={() => window.print()}
+                  disabled={isExporting || targetExamCardStudents.length === 0}
+                  className="px-5 py-2 rounded-xl bg-amber-500 hover:bg-amber-600 text-slate-950 text-xs font-extrabold flex items-center gap-2 shadow-md transition-all cursor-pointer"
+                >
+                  <Printer className="w-4 h-4" />
+                  <span>Cetak Langsung (Print)</span>
+                </button>
+              </div>
             </div>
 
-            {/* Actions */}
-            <div className="flex items-center gap-2">
-              <button
-                onClick={handleExportCardsPdf}
-                disabled={isExporting || targetExamCardStudents.length === 0}
-                className="px-4 py-2 rounded-xl bg-emerald-800 hover:bg-emerald-900 text-white text-xs font-bold flex items-center gap-2 shadow-sm transition-all cursor-pointer"
-              >
-                <FileDown className="w-4 h-4 text-emerald-300" />
-                <span>Download PDF A4 ({examCardPages.length} Hal)</span>
-              </button>
-              <button
-                onClick={() => window.print()}
-                disabled={isExporting || targetExamCardStudents.length === 0}
-                className="px-5 py-2 rounded-xl bg-amber-500 hover:bg-amber-600 text-slate-950 text-xs font-extrabold flex items-center gap-2 shadow-md transition-all cursor-pointer"
-              >
-                <Printer className="w-4 h-4" />
-                <span>Cetak Langsung (Print)</span>
-              </button>
+            <div className="pt-2.5 border-t border-slate-100 flex flex-wrap items-center justify-between gap-2 text-[11px] text-slate-600">
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="font-bold text-slate-800">Penandatangan Kartu:</span>
+                <span className="px-2 py-0.5 rounded bg-emerald-50 border border-emerald-200 font-semibold text-emerald-900">
+                  Ketua Panitia Pelaksana Ujian: {examInfo.ketuaPanitiaNama || 'Ketua Panitia Ujian'}
+                </span>
+                {examInfo.ketuaPanitiaNip && (
+                  <span className="font-mono text-slate-500">NIP. {examInfo.ketuaPanitiaNip}</span>
+                )}
+              </div>
+              <span className="text-emerald-700 font-semibold">
+                {examInfo.ketuaPanitiaTtdUrl
+                  ? '✓ TTD Digital & Stempel Resmi Aktif'
+                  : '✓ Area TTD Basah & Stempel Resmi MTs Miftahul Huda Aktif'}
+              </span>
             </div>
           </div>
 
@@ -1207,55 +1526,215 @@ export const ManajemenUjianView: React.FC<Props> = ({
       {/* ========================================================= */}
       {subTab === 'denah' && (
         <div className="space-y-5">
+          <style>{`
+            @media print {
+              @page {
+                size: ${denahPaperSize === 'F4' ? '330mm 215mm' : 'A4 landscape'} !important;
+                margin: 0 !important;
+              }
+            }
+          `}</style>
+
           {/* Top Bar */}
-          <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-xs flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 no-print">
-            <div className="flex items-center gap-3">
-              <label className="text-xs font-bold text-slate-700">Pilih Ruang Ujian:</label>
-              <select
-                value={selectedDenahRoomId}
-                onChange={(e) => setSelectedDenahRoomId(e.target.value)}
-                className="px-3 py-1.5 text-xs rounded-xl border border-slate-300 bg-slate-50 font-bold text-emerald-950 focus:outline-none"
-              >
-                {examRooms.map((r) => (
-                  <option key={r.id} value={r.id}>
-                    {r.nomorRuang} ({r.namaRuang})
-                  </option>
-                ))}
-              </select>
+          <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-xs space-y-3 no-print">
+            <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
+              <div className="flex flex-wrap items-center gap-3">
+                {/* Print Scope Toggle */}
+                <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-xl text-xs font-bold">
+                  <button
+                    onClick={() => setDenahPrintScope('single')}
+                    className={`px-3 py-1.5 rounded-lg transition-all cursor-pointer ${
+                      denahPrintScope === 'single'
+                        ? 'bg-emerald-800 text-white shadow-xs'
+                        : 'text-slate-700 hover:bg-slate-200'
+                    }`}
+                  >
+                    Ruang Terpilih
+                  </button>
+                  <button
+                    onClick={() => setDenahPrintScope('all')}
+                    className={`px-3 py-1.5 rounded-lg transition-all cursor-pointer ${
+                      denahPrintScope === 'all'
+                        ? 'bg-emerald-800 text-white shadow-xs'
+                        : 'text-slate-700 hover:bg-slate-200'
+                    }`}
+                  >
+                    Semua Ruang ({examRooms.length} Hal)
+                  </button>
+                </div>
+
+                {denahPrintScope === 'single' && (
+                  <div className="flex items-center gap-2">
+                    <label className="text-xs font-bold text-slate-700">Pilih Ruang:</label>
+                    <select
+                      value={selectedDenahRoomId}
+                      onChange={(e) => {
+                        setSelectedDenahRoomId(e.target.value);
+                        setSelectedDeskSlot(null);
+                      }}
+                      className="px-3 py-1.5 text-xs rounded-xl border border-slate-300 bg-slate-50 font-bold text-emerald-950 focus:outline-none"
+                    >
+                      {examRooms.map((r) => {
+                        const rCount = examAllocations.filter((a) => a.roomId === r.id).length;
+                        return (
+                          <option key={r.id} value={r.id}>
+                            {r.nomorRuang} ({r.namaRuang}) — {rCount}/{r.kapasitas} Siswa
+                          </option>
+                        );
+                      })}
+                    </select>
+                  </div>
+                )}
+
+                {/* Paper Size Toggle */}
+                <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-xl text-xs font-bold">
+                  <button
+                    onClick={() => setDenahPaperSize('A4')}
+                    className={`px-2.5 py-1.5 rounded-lg transition-all cursor-pointer ${
+                      denahPaperSize === 'A4'
+                        ? 'bg-amber-500 text-slate-950 shadow-xs'
+                        : 'text-slate-700 hover:bg-slate-200'
+                    }`}
+                  >
+                    A4 Landscape (297×210)
+                  </button>
+                  <button
+                    onClick={() => setDenahPaperSize('F4')}
+                    className={`px-2.5 py-1.5 rounded-lg transition-all cursor-pointer ${
+                      denahPaperSize === 'F4'
+                        ? 'bg-amber-500 text-slate-950 shadow-xs'
+                        : 'text-slate-700 hover:bg-slate-200'
+                    }`}
+                  >
+                    F4 Landscape (330×215)
+                  </button>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2 flex-wrap">
+                <button
+                  onClick={() => {
+                    setDenahEditMode((prev) => !prev);
+                    setSelectedDeskSlot(null);
+                  }}
+                  className={`px-3.5 py-2 rounded-xl border text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer ${
+                    denahEditMode
+                      ? 'border-amber-500 bg-amber-100 text-amber-950 shadow-xs'
+                      : 'border-slate-300 bg-white hover:bg-slate-50 text-slate-700'
+                  }`}
+                >
+                  <ArrowLeftRight className="w-4 h-4 text-emerald-700" />
+                  <span>{denahEditMode ? 'Mode Atur Kursi: AKTIF' : 'Atur Posisi Duduk Manual'}</span>
+                </button>
+                <button
+                  onClick={handleExportDenahPdf}
+                  disabled={isExporting || examRooms.length === 0}
+                  className="px-4 py-2 rounded-xl bg-emerald-800 hover:bg-emerald-900 text-white text-xs font-bold flex items-center gap-2 shadow-sm transition-all cursor-pointer"
+                >
+                  <FileDown className="w-4 h-4 text-emerald-300" />
+                  <span>
+                    Download PDF {denahPaperSize} Landscape
+                    {denahPrintScope === 'all' ? ` (${examRooms.length} Hal)` : ''}
+                  </span>
+                </button>
+                <button
+                  onClick={() => window.print()}
+                  disabled={examRooms.length === 0}
+                  className="px-5 py-2 rounded-xl bg-amber-500 hover:bg-amber-600 text-slate-950 text-xs font-extrabold flex items-center gap-2 shadow-md transition-all cursor-pointer"
+                >
+                  <Printer className="w-4 h-4" />
+                  <span>Cetak Denah (Print)</span>
+                </button>
+              </div>
             </div>
 
-            <div className="flex items-center gap-2">
-              <button
-                onClick={handleExportDenahPdf}
-                disabled={isExporting}
-                className="px-4 py-2 rounded-xl bg-emerald-800 hover:bg-emerald-900 text-white text-xs font-bold flex items-center gap-2 shadow-sm transition-all cursor-pointer"
-              >
-                <FileDown className="w-4 h-4 text-emerald-300" />
-                <span>Download PDF Denah Ruang</span>
-              </button>
-              <button
-                onClick={() => window.print()}
-                className="px-5 py-2 rounded-xl bg-amber-500 hover:bg-amber-600 text-slate-950 text-xs font-extrabold flex items-center gap-2 shadow-md transition-all cursor-pointer"
-              >
-                <Printer className="w-4 h-4" />
-                <span>Cetak Denah (Print)</span>
-              </button>
-            </div>
+            {denahEditMode && (
+              <div className="px-3.5 py-2 rounded-xl bg-amber-50 border border-amber-300 text-xs text-amber-950 flex flex-wrap items-center justify-between gap-2">
+                {selectedDeskSlot ? (
+                  <div className="flex items-center gap-2 font-semibold">
+                    <span className="px-2 py-0.5 rounded bg-amber-400 text-slate-950 font-black text-[11px]">
+                      DIPILIH
+                    </span>
+                    <span>
+                      <strong>{studentMap.get(selectedDeskSlot.allocation?.studentId || '')?.nama}</strong>{' '}
+                      ({roomMap.get(selectedDeskSlot.roomId)?.nomorRuang} • Meja{' '}
+                      {String(selectedDeskSlot.deskNum).padStart(2, '0')} - {selectedDeskSlot.side}). Klik
+                      kursi tujuan (kosong atau terisi) untuk memindah/menukar posisi duduk!
+                    </span>
+                  </div>
+                ) : (
+                  <span>
+                    <strong>Mode Pengaturan Manual Aktif:</strong> Klik salah satu kotak nama siswa pada denah
+                    di bawah, lalu klik kursi tujuan (boleh antar meja atau antar ruang) untuk memindah atau
+                    menukar posisi duduk.
+                  </span>
+                )}
+                {selectedDeskSlot && (
+                  <button
+                    onClick={() => setSelectedDeskSlot(null)}
+                    className="px-2.5 py-1 rounded-lg bg-white border border-amber-400 text-amber-900 font-bold text-[11px] hover:bg-amber-100 cursor-pointer"
+                  >
+                    Batalkan Pilihan
+                  </button>
+                )}
+              </div>
+            )}
           </div>
 
           {/* Printable Layout Container */}
           <div className="bg-slate-200/90 p-4 sm:p-8 rounded-2xl border border-slate-300 flex justify-center overflow-x-auto shadow-inner">
-            <div ref={printDenahContainerRef}>
-              {roomMap.get(selectedDenahRoomId) ? (
+            <div ref={printDenahContainerRef} className="space-y-8">
+              {denahPrintScope === 'all' ? (
+                examRooms.length === 0 ? (
+                  <div className="bg-white p-12 text-center text-slate-400 rounded-xl">
+                    Belum ada ruang ujian.
+                  </div>
+                ) : (
+                  examRooms.map((rm) => (
+                    <div key={rm.id} className="flex flex-col items-center">
+                      <div className="mb-2 text-xs font-bold text-slate-700 no-print flex items-center justify-between w-full px-2">
+                        <span className="px-3 py-1 rounded-full bg-emerald-800 text-white text-[11px] font-bold shadow-xs">
+                          {rm.nomorRuang} — {rm.namaRuang}
+                        </span>
+                        <span className="text-slate-600 text-[11px]">
+                          {denahPaperSize} Landscape • {examAllocations.filter((a) => a.roomId === rm.id).length}/
+                          {rm.kapasitas} Siswa
+                        </span>
+                      </div>
+                      <ExamRoomLayoutPrint
+                        room={rm}
+                        students={students}
+                        allocations={examAllocations}
+                        identity={identity}
+                        examInfo={examInfo}
+                        paperSize={denahPaperSize}
+                        interactive={denahEditMode}
+                        selectedSlot={selectedDeskSlot}
+                        onSlotClick={(deskNum, side, alloc) =>
+                          handleDenahSlotClick(rm.id, deskNum, side, alloc)
+                        }
+                      />
+                    </div>
+                  ))
+                )
+              ) : roomMap.get(selectedDenahRoomId) ? (
                 <ExamRoomLayoutPrint
                   room={roomMap.get(selectedDenahRoomId)!}
                   students={students}
                   allocations={examAllocations}
                   identity={identity}
                   examInfo={examInfo}
+                  paperSize={denahPaperSize}
+                  interactive={denahEditMode}
+                  selectedSlot={selectedDeskSlot}
+                  onSlotClick={(deskNum, side, alloc) =>
+                    handleDenahSlotClick(selectedDenahRoomId, deskNum, side, alloc)
+                  }
                 />
               ) : (
-                <div className="bg-white p-12 text-center text-slate-400">Pilih ruang ujian.</div>
+                <div className="bg-white p-12 text-center text-slate-400 rounded-xl">
+                  Pilih ruang ujian.
+                </div>
               )}
             </div>
           </div>
@@ -1396,6 +1875,7 @@ export const ManajemenUjianView: React.FC<Props> = ({
                     ketuaPanitiaNama: examInfo.ketuaPanitiaNama || 'H. AHMAD RIFA\'I, S.Pd.I.',
                     ketuaPanitiaNip: examInfo.ketuaPanitiaNip || '198402122009011015',
                     tempatTanggalJadwal: examInfo.tempatTanggalJadwal || `${identity.kotaPenerbitan || 'Tabir Selatan'}, 25 November 2026`,
+                    ketuaPanitiaTtdUrl: examInfo.ketuaPanitiaTtdUrl || '',
                   });
                   setIsScheduleSignModalOpen(true);
                 }}
@@ -1850,7 +2330,7 @@ export const ManajemenUjianView: React.FC<Props> = ({
 
                   <div>
                     <label className="block text-xs font-bold text-slate-700 mb-1">
-                      NIP / NPK Ketua Panitia Ujian
+                      NIP / NPK Ketua Panitia Pelaksana Ujian
                     </label>
                     <input
                       type="text"
@@ -1872,6 +2352,53 @@ export const ManajemenUjianView: React.FC<Props> = ({
                       onChange={(e) => onSaveExamInfo({ ...examInfo, tempatTanggalJadwal: e.target.value })}
                       className="w-full px-3 py-2 text-xs rounded-xl border border-slate-300 font-medium"
                     />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 mb-1">
+                      Scan Tanda Tangan Ketua Panitia Pelaksana Ujian (untuk Kartu Ujian)
+                    </label>
+                    <div className="flex items-center gap-3 p-2.5 rounded-xl border border-slate-200 bg-slate-50">
+                      {examInfo.ketuaPanitiaTtdUrl ? (
+                        <img
+                          src={examInfo.ketuaPanitiaTtdUrl}
+                          alt="TTD Ketua Panitia"
+                          className="h-10 w-24 object-contain bg-white rounded border border-slate-200 p-1"
+                        />
+                      ) : (
+                        <div className="h-10 w-24 rounded border border-dashed border-slate-300 bg-white flex items-center justify-center text-[10px] text-slate-400">
+                          TTD Basah
+                        </div>
+                      )}
+                      <div className="flex-1 flex items-center gap-2 flex-wrap">
+                        <label className="px-3 py-1.5 rounded-lg bg-emerald-700 hover:bg-emerald-800 text-white text-[11px] font-bold flex items-center gap-1.5 cursor-pointer">
+                          <Upload className="w-3.5 h-3.5" />
+                          <span>Upload TTD (PNG/JPG)</span>
+                          <input
+                            type="file"
+                            accept="image/*"
+                            className="hidden"
+                            onChange={(e) => {
+                              const file = e.target.files?.[0];
+                              if (file) handleUploadPanitiaTtd(file, 'examInfo');
+                              e.target.value = '';
+                            }}
+                          />
+                        </label>
+                        {examInfo.ketuaPanitiaTtdUrl && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              onSaveExamInfo({ ...examInfo, ketuaPanitiaTtdUrl: '' });
+                              showNotification('TTD digital Ketua Panitia dihapus (menggunakan ruang TTD basah).');
+                            }}
+                            className="px-2.5 py-1.5 rounded-lg border border-rose-200 text-rose-700 hover:bg-rose-50 text-[11px] font-bold cursor-pointer"
+                          >
+                            Hapus TTD
+                          </button>
+                        )}
+                      </div>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -2065,20 +2592,54 @@ export const ManajemenUjianView: React.FC<Props> = ({
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-3.5 pt-2">
+              <div className="space-y-2 pt-1">
+                <label className="flex items-start gap-2.5 p-2.5 rounded-xl border border-emerald-200 bg-emerald-50/60 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={autoUseFiveRoomsPreset}
+                    onChange={(e) => setAutoUseFiveRoomsPreset(e.target.checked)}
+                    className="mt-0.5 rounded text-emerald-700"
+                  />
+                  <div>
+                    <p className="font-bold text-emerald-950">
+                      Terapkan Standar 5 Ruang Ujian (3 Meja × 5 Baris, 2 Siswa/Meja = 30 Siswa/Ruang)
+                    </p>
+                    <p className="text-[10px] text-emerald-800">
+                      Otomatis menyusun 6 rombel (7A, 7B, 8A, 8B, 9A, 9B) ke dalam Ruang 01 s.d. Ruang 05 tanpa duplikasi siswa.
+                    </p>
+                  </div>
+                </label>
+
+                <label className="flex items-start gap-2.5 p-2.5 rounded-xl border border-slate-200 bg-slate-50 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={autoDistributeEvenly}
+                    onChange={(e) => setAutoDistributeEvenly(e.target.checked)}
+                    className="mt-0.5 rounded text-emerald-700"
+                  />
+                  <div>
+                    <p className="font-bold text-slate-900">Bagi Jumlah Siswa Merata ke Semua Ruang</p>
+                    <p className="text-[10px] text-slate-500">
+                      Menyeimbangkan jumlah peserta di tiap ruang (misal seluruh siswa dibagi rata ke 5 ruang).
+                    </p>
+                  </div>
+                </label>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3.5 pt-1">
                 <div>
                   <label className="block font-bold text-slate-700 mb-1">
-                    Kapasitas Tiap Ruang:
+                    Kapasitas Maks. Tiap Ruang:
                   </label>
                   <input
                     type="number"
                     min="1"
-                    max="40"
+                    max="60"
                     value={autoCapacity}
-                    onChange={(e) => setAutoCapacity(parseInt(e.target.value) || 20)}
+                    onChange={(e) => setAutoCapacity(parseInt(e.target.value) || 30)}
                     className="w-full px-3 py-2 rounded-xl border border-slate-300 font-bold"
                   />
-                  <p className="text-[10px] text-slate-400 mt-0.5">Standar: 20 meja per ruang</p>
+                  <p className="text-[10px] text-slate-400 mt-0.5">Standar: 30 siswa (15 meja × 2 siswa)</p>
                 </div>
 
                 <div>
@@ -2096,7 +2657,9 @@ export const ManajemenUjianView: React.FC<Props> = ({
               </div>
 
               <div className="p-3 bg-emerald-50 rounded-xl border border-emerald-200 text-[11px] text-emerald-900">
-                Total Siswa: <strong>{students.length}</strong> ➜ Ruang Tersedia: <strong>{examRooms.length} Ruang</strong> (Daya tampung: {examRooms.length * autoCapacity} kursi).
+                Total Siswa: <strong>{students.length}</strong> ➜ Ruang Target:{' '}
+                <strong>{autoUseFiveRoomsPreset ? 5 : examRooms.length} Ruang</strong> (Daya tampung:{' '}
+                {(autoUseFiveRoomsPreset ? 5 : examRooms.length) * autoCapacity} kursi).
               </div>
             </div>
 
@@ -2166,34 +2729,50 @@ export const ManajemenUjianView: React.FC<Props> = ({
                 />
               </div>
 
-              <div className="grid grid-cols-2 gap-3.5">
+              <div className="grid grid-cols-3 gap-3">
                 <div>
-                  <label className="block font-bold text-slate-700 mb-1">Kapasitas Kursi</label>
+                  <label className="block font-bold text-slate-700 mb-1">Kapasitas Siswa</label>
                   <input
                     type="number"
                     min="1"
-                    max="50"
+                    max="60"
                     value={roomFormData.kapasitas}
                     onChange={(e) =>
-                      setRoomFormData({ ...roomFormData, kapasitas: parseInt(e.target.value) || 20 })
+                      setRoomFormData({ ...roomFormData, kapasitas: parseInt(e.target.value) || 30 })
                     }
                     className="w-full px-3 py-2 rounded-xl border border-slate-300 font-bold"
                   />
+                  <p className="text-[10px] text-slate-400 mt-0.5">Standar: 30</p>
                 </div>
 
                 <div>
-                  <label className="block font-bold text-slate-700 mb-1">Kolom Meja Denah</label>
+                  <label className="block font-bold text-slate-700 mb-1">Meja Ke Samping</label>
                   <input
                     type="number"
-                    min="2"
+                    min="1"
                     max="6"
                     value={roomFormData.kolomMeja}
                     onChange={(e) =>
-                      setRoomFormData({ ...roomFormData, kolomMeja: parseInt(e.target.value) || 4 })
+                      setRoomFormData({ ...roomFormData, kolomMeja: parseInt(e.target.value) || 3 })
                     }
                     className="w-full px-3 py-2 rounded-xl border border-slate-300 font-bold"
                   />
-                  <p className="text-[10px] text-slate-400 mt-0.5">Standar: 4 lajur meja</p>
+                  <p className="text-[10px] text-slate-400 mt-0.5">Standar: 3 meja</p>
+                </div>
+
+                <div>
+                  <label className="block font-bold text-slate-700 mb-1">Siswa / Meja</label>
+                  <select
+                    value={roomFormData.siswaPerMeja}
+                    onChange={(e) =>
+                      setRoomFormData({ ...roomFormData, siswaPerMeja: parseInt(e.target.value) || 2 })
+                    }
+                    className="w-full px-3 py-2 rounded-xl border border-slate-300 font-bold bg-white"
+                  >
+                    <option value={2}>2 Siswa</option>
+                    <option value={1}>1 Siswa</option>
+                  </select>
+                  <p className="text-[10px] text-slate-400 mt-0.5">Standar: 2/meja</p>
                 </div>
               </div>
 
@@ -2264,7 +2843,9 @@ export const ManajemenUjianView: React.FC<Props> = ({
               <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 space-y-1">
                 <p className="text-slate-500 font-semibold">Penempatan Saat Ini:</p>
                 <p className="font-bold text-slate-900 text-sm">
-                  {roomMap.get(movingStudentAllocation.roomId)?.nomorRuang} • Meja {movingStudentAllocation.nomorMeja}
+                  {roomMap.get(movingStudentAllocation.roomId)?.nomorRuang} • Meja{' '}
+                  {String(movingStudentAllocation.nomorMeja).padStart(2, '0')}
+                  {movingStudentAllocation.posisiKursi ? ` (${movingStudentAllocation.posisiKursi})` : ''}
                 </p>
                 <p className="text-[11px] text-slate-600 font-mono">
                   No. Peserta: {movingStudentAllocation.nomorPeserta}
@@ -2273,26 +2854,96 @@ export const ManajemenUjianView: React.FC<Props> = ({
 
               <div>
                 <label className="block font-bold text-slate-800 mb-1">
-                  Pilih Ruang Ujian Baru:
+                  Pilih Ruang Ujian Tujuan:
                 </label>
                 <select
                   value={selectedTargetRoomId}
-                  onChange={(e) => setSelectedTargetRoomId(e.target.value)}
+                  onChange={(e) => {
+                    const nextRoomId = e.target.value;
+                    setSelectedTargetRoomId(nextRoomId);
+                    const rm = roomMap.get(nextRoomId);
+                    if (rm) {
+                      const open = findFirstOpenSeat(rm, examAllocations);
+                      setSelectedTargetDesk(open?.desk || 1);
+                      setSelectedTargetSide(open?.side || 'Kiri');
+                    }
+                  }}
                   className="w-full px-3 py-2 text-xs rounded-xl border border-slate-300 font-bold bg-white"
                 >
                   {examRooms.map((r) => {
                     const count = examAllocations.filter((a) => a.roomId === r.id).length;
                     return (
-                      <option key={r.id} value={r.id} disabled={r.id === movingStudentAllocation.roomId}>
-                        {r.nomorRuang} ({r.namaRuang}) — {count}/{r.kapasitas} kursi
+                      <option key={r.id} value={r.id}>
+                        {r.nomorRuang} ({r.namaRuang}) — {count}/{r.kapasitas} siswa
                       </option>
                     );
                   })}
                 </select>
-                <p className="text-[10px] text-slate-400 mt-1">
-                  Nomor meja akan diisi ke kursi kosong berikutnya di ruang tujuan secara otomatis.
-                </p>
               </div>
+
+              {(() => {
+                const targetRm = roomMap.get(selectedTargetRoomId);
+                const perDesk = targetRm?.siswaPerMeja || 2;
+                const totalDesks = Math.max(
+                  Math.ceil((targetRm?.kapasitas || 30) / perDesk),
+                  (targetRm?.barisMeja || 5) * (targetRm?.kolomMeja || 3)
+                );
+                const existingOccupant = examAllocations.find(
+                  (a) =>
+                    a.id !== movingStudentAllocation.id &&
+                    a.roomId === selectedTargetRoomId &&
+                    a.nomorMeja === selectedTargetDesk &&
+                    (perDesk !== 2 || (a.posisiKursi || 'Kiri') === selectedTargetSide)
+                );
+                const occupantStudent = existingOccupant
+                  ? studentMap.get(existingOccupant.studentId)
+                  : undefined;
+
+                return (
+                  <div className="space-y-3">
+                    <div className={`grid ${perDesk === 2 ? 'grid-cols-2' : 'grid-cols-1'} gap-3`}>
+                      <div>
+                        <label className="block font-bold text-slate-800 mb-1">Nomor Meja Tujuan:</label>
+                        <select
+                          value={selectedTargetDesk}
+                          onChange={(e) => setSelectedTargetDesk(parseInt(e.target.value) || 1)}
+                          className="w-full px-3 py-2 text-xs rounded-xl border border-slate-300 font-bold bg-white"
+                        >
+                          {Array.from({ length: totalDesks }, (_, idx) => idx + 1).map((d) => (
+                            <option key={d} value={d}>
+                              Meja {String(d).padStart(2, '0')}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+
+                      {perDesk === 2 && (
+                        <div>
+                          <label className="block font-bold text-slate-800 mb-1">Posisi Kursi:</label>
+                          <select
+                            value={selectedTargetSide}
+                            onChange={(e) => setSelectedTargetSide(e.target.value as 'Kiri' | 'Kanan')}
+                            className="w-full px-3 py-2 text-xs rounded-xl border border-slate-300 font-bold bg-white"
+                          >
+                            <option value="Kiri">Kursi A (Kiri)</option>
+                            <option value="Kanan">Kursi B (Kanan)</option>
+                          </select>
+                        </div>
+                      )}
+                    </div>
+
+                    {occupantStudent ? (
+                      <div className="p-2.5 rounded-xl bg-amber-50 border border-amber-200 text-[11px] text-amber-900">
+                        Kursi ini sedang ditempati oleh <strong>{occupantStudent.nama}</strong> ({occupantStudent.kelas}). Menekan simpan akan <strong>menukar posisi</strong> kedua siswa secara otomatis.
+                      </div>
+                    ) : (
+                      <p className="text-[10px] text-emerald-700 font-semibold">
+                        ✓ Kursi tujuan tersedia kosong. Kartu ujian &amp; denah langsung tersinkron.
+                      </p>
+                    )}
+                  </div>
+                );
+              })()}
             </div>
 
             <div className="px-6 py-4 bg-slate-50 border-t flex justify-end gap-2.5 text-xs">
@@ -2307,7 +2958,7 @@ export const ManajemenUjianView: React.FC<Props> = ({
                 className="px-5 py-2 rounded-xl bg-emerald-700 hover:bg-emerald-800 text-white font-bold shadow-md cursor-pointer flex items-center gap-1.5"
               >
                 <MoveRight className="w-4 h-4" />
-                <span>Pindahkan Siswa</span>
+                <span>Simpan Posisi Siswa</span>
               </button>
             </div>
           </div>
@@ -2322,9 +2973,9 @@ export const ManajemenUjianView: React.FC<Props> = ({
           <div className="bg-white w-full max-w-lg rounded-2xl shadow-2xl border border-slate-200 overflow-hidden">
             <div className="px-6 py-4 bg-gradient-to-r from-emerald-900 to-emerald-800 text-white flex items-center justify-between">
               <div>
-                <h3 className="text-sm font-bold">Pengaturan Tanda Tangan & Panitia Ujian</h3>
+                <h3 className="text-sm font-bold">Pengaturan Ketua Panitia &amp; Tanda Tangan</h3>
                 <p className="text-xs text-emerald-200">
-                  Untuk lembar cetak Jadwal Ujian & Pengawas Ruang MTs Miftahul Huda
+                  Digunakan pada Kartu Peserta Ujian (Ketua Panitia &amp; Stempel) serta Jadwal Ujian
                 </p>
               </div>
               <button
@@ -2336,27 +2987,19 @@ export const ManajemenUjianView: React.FC<Props> = ({
             </div>
 
             <div className="p-6 space-y-4 text-xs">
-              <div className="p-3 rounded-xl bg-amber-50 border border-amber-200 text-amber-900">
-                <p className="font-bold">Format Penandatangan Dokumen:</p>
-                <div className="grid grid-cols-2 gap-3 mt-2 text-[11px]">
-                  <div>
-                    <span className="font-semibold text-slate-600">Sebelah Kiri Bawah:</span>
-                    <p className="font-bold text-slate-900">Kepala Madrasah</p>
-                    <p className="text-slate-500">{identity.kepalaMadrasah}</p>
-                  </div>
-                  <div>
-                    <span className="font-semibold text-slate-600">Sebelah Kanan Bawah:</span>
-                    <p className="font-bold text-slate-900">Ketua Panitia Ujian</p>
-                    <p className="text-slate-500">
-                      {panitiaFormData.ketuaPanitiaNama || '(Belum diatur)'}
-                    </p>
-                  </div>
-                </div>
+              <div className="p-3 rounded-xl bg-amber-50 border border-amber-200 text-amber-900 space-y-1.5">
+                <p className="font-bold">Ketentuan Penandatangan Dokumen Ujian:</p>
+                <p className="text-[11px] text-slate-700">
+                  • <strong>Kartu Peserta Ujian:</strong> Menggunakan <strong>Ketua Panitia Pelaksana Ujian</strong> + Stempel Resmi MTs Miftahul Huda (tanpa Kepala Madrasah).
+                </p>
+                <p className="text-[11px] text-slate-700">
+                  • <strong>Jadwal Ujian:</strong> Kepala Madrasah ({identity.kepalaMadrasah}) di kiri bawah &amp; Ketua Panitia ({panitiaFormData.ketuaPanitiaNama || 'Belum diatur'}) di kanan bawah.
+                </p>
               </div>
 
               <div>
                 <label className="block font-bold text-slate-800 mb-1">
-                  Nama Lengkap Ketua Panitia Ujian <span className="text-rose-500">*</span>
+                  Nama Lengkap Ketua Panitia Pelaksana Ujian <span className="text-rose-500">*</span>
                 </label>
                 <input
                   type="text"
@@ -2372,7 +3015,7 @@ export const ManajemenUjianView: React.FC<Props> = ({
 
               <div>
                 <label className="block font-bold text-slate-800 mb-1">
-                  NIP / NPK Ketua Panitia Ujian
+                  NIP / NPK Ketua Panitia Pelaksana Ujian
                 </label>
                 <input
                   type="text"
@@ -2387,7 +3030,7 @@ export const ManajemenUjianView: React.FC<Props> = ({
 
               <div>
                 <label className="block font-bold text-slate-800 mb-1">
-                  Tempat & Tanggal Pengesahan Jadwal <span className="text-rose-500">*</span>
+                  Tempat &amp; Tanggal Pengesahan <span className="text-rose-500">*</span>
                 </label>
                 <input
                   type="text"
@@ -2399,6 +3042,50 @@ export const ManajemenUjianView: React.FC<Props> = ({
                   }
                   className="w-full px-3 py-2 rounded-xl border border-slate-300 focus:outline-none focus:border-emerald-600 font-medium"
                 />
+              </div>
+
+              <div>
+                <label className="block font-bold text-slate-800 mb-1">
+                  Scan Tanda Tangan Ketua Panitia Pelaksana Ujian (Opsional untuk Kartu Ujian)
+                </label>
+                <div className="flex items-center gap-3 p-2.5 rounded-xl border border-slate-200 bg-slate-50">
+                  {panitiaFormData.ketuaPanitiaTtdUrl ? (
+                    <img
+                      src={panitiaFormData.ketuaPanitiaTtdUrl}
+                      alt="TTD Ketua Panitia"
+                      className="h-10 w-24 object-contain bg-white rounded border border-slate-200 p-1"
+                    />
+                  ) : (
+                    <div className="h-10 w-24 rounded border border-dashed border-slate-300 bg-white flex items-center justify-center text-[10px] text-slate-400">
+                      TTD Basah
+                    </div>
+                  )}
+                  <div className="flex-1 flex items-center gap-2 flex-wrap">
+                    <label className="px-3 py-1.5 rounded-lg bg-emerald-700 hover:bg-emerald-800 text-white text-[11px] font-bold flex items-center gap-1.5 cursor-pointer">
+                      <Upload className="w-3.5 h-3.5" />
+                      <span>Upload TTD</span>
+                      <input
+                        type="file"
+                        accept="image/*"
+                        className="hidden"
+                        onChange={(e) => {
+                          const file = e.target.files?.[0];
+                          if (file) handleUploadPanitiaTtd(file, 'modal');
+                          e.target.value = '';
+                        }}
+                      />
+                    </label>
+                    {panitiaFormData.ketuaPanitiaTtdUrl && (
+                      <button
+                        type="button"
+                        onClick={() => setPanitiaFormData({ ...panitiaFormData, ketuaPanitiaTtdUrl: '' })}
+                        className="px-2.5 py-1.5 rounded-lg border border-rose-200 text-rose-700 hover:bg-rose-50 text-[11px] font-bold cursor-pointer"
+                      >
+                        Hapus TTD
+                      </button>
+                    )}
+                  </div>
+                </div>
               </div>
             </div>
 

@@ -377,37 +377,84 @@ export const StorageService = {
     return result;
   },
 
-  // Intelligent Automatic Student Room & Desk Distribution
+  createStandardFiveRooms(existingRooms: ExamRoom[] = []): ExamRoom[] {
+    return DEFAULT_EXAM_ROOMS.map((defRoom, idx) => {
+      const prev = existingRooms[idx];
+      return {
+        ...defRoom,
+        pengawas1: prev?.pengawas1 || defRoom.pengawas1,
+        pengawas2: prev?.pengawas2 || defRoom.pengawas2,
+      };
+    });
+  },
+
+  // Intelligent Automatic Student Room & Desk Distribution (6 rombel -> 5 rooms, 3x5 desks, 2 siswa/meja = 30/room)
   autoAllocateStudents(
     students: Student[],
     rooms: ExamRoom[],
     mode: 'by_class' | 'cross_class' | 'alphabetical' | 'by_nis',
-    nomorPrefix: string = '02-15-023-'
+    nomorPrefix: string = '02-15-023-',
+    distributeEvenly: boolean = true
   ): ExamAllocation[] {
     if (rooms.length === 0 || students.length === 0) return [];
+
+    // 1. Ensure strictly zero duplicate students
+    const uniqueMap = new Map<string, Student>();
+    students.forEach((s) => {
+      if (s && s.id && !uniqueMap.has(s.id)) {
+        uniqueMap.set(s.id, s);
+      }
+    });
+    const uniqueStudents = Array.from(uniqueMap.values());
 
     let orderedStudents: Student[] = [];
 
     if (mode === 'alphabetical') {
-      orderedStudents = [...students].sort((a, b) => a.nama.localeCompare(b.nama));
+      orderedStudents = [...uniqueStudents].sort((a, b) => a.nama.localeCompare(b.nama));
     } else if (mode === 'by_nis') {
-      orderedStudents = [...students].sort((a, b) => a.nis.localeCompare(b.nis));
+      orderedStudents = [...uniqueStudents].sort((a, b) => a.nis.localeCompare(b.nis));
     } else if (mode === 'cross_class') {
-      // Cross-class distribution: interleave Kelas 7, 8, 9
-      const grouped: Record<string, Student[]> = {};
-      students.forEach((s) => {
-        const grade = s.kelas.charAt(0);
-        if (!grouped[grade]) grouped[grade] = [];
-        grouped[grade].push(s);
+      // Cross-class distribution across 6 rombels (7A, 7B, 8A, 8B, 9A, 9B)
+      // Order class buckets so neighboring classes are from different grade levels (7A, 8A, 9A, 7B, 8B, 9B)
+      const byClass: Record<string, Student[]> = {};
+      uniqueStudents.forEach((s) => {
+        const cls = (s.kelas || '7A').trim().toUpperCase();
+        if (!byClass[cls]) byClass[cls] = [];
+        byClass[cls].push(s);
       });
-      const grades = Object.keys(grouped).sort();
+      Object.values(byClass).forEach((arr) => arr.sort((a, b) => a.nama.localeCompare(b.nama)));
+
+      const allClasses = Object.keys(byClass).sort();
+      // Interleave grade prefixes (e.g. 7A, 8A, 9A, 7B, 8B, 9B)
+      const byGrade: Record<string, string[]> = {};
+      allClasses.forEach((c) => {
+        const g = c.charAt(0);
+        if (!byGrade[g]) byGrade[g] = [];
+        byGrade[g].push(c);
+      });
+      const gradeKeys = Object.keys(byGrade).sort();
+      const interleavedClassOrder: string[] = [];
+      let moreClasses = true;
+      let cPtr = 0;
+      while (moreClasses) {
+        moreClasses = false;
+        gradeKeys.forEach((g) => {
+          if (cPtr < byGrade[g].length) {
+            interleavedClassOrder.push(byGrade[g][cPtr]);
+            moreClasses = true;
+          }
+        });
+        cPtr++;
+      }
+
+      // Round-robin pick across classes so adjacent students (sitting at the same desk) are from different classes!
       let hasMore = true;
       let ptr = 0;
       while (hasMore) {
         hasMore = false;
-        grades.forEach((g) => {
-          if (ptr < grouped[g].length) {
-            orderedStudents.push(grouped[g][ptr]);
+        interleavedClassOrder.forEach((cls) => {
+          if (ptr < byClass[cls].length) {
+            orderedStudents.push(byClass[cls][ptr]);
             hasMore = true;
           }
         });
@@ -415,39 +462,99 @@ export const StorageService = {
       }
     } else {
       // by_class: 7A, 7B, 8A, 8B, 9A, 9B
-      orderedStudents = [...students].sort((a, b) => {
+      orderedStudents = [...uniqueStudents].sort((a, b) => {
         if (a.kelas === b.kelas) return a.nama.localeCompare(b.nama);
         return a.kelas.localeCompare(b.kelas);
       });
     }
 
-    const allocations: ExamAllocation[] = [];
-    let studentIndex = 0;
+    // 2. Partition ordered students across rooms
+    const roomBuckets: Student[][] = rooms.map(() => []);
+    const roomCaps = rooms.map((r) => r.kapasitas || 30);
 
-    for (let r = 0; r < rooms.length; r++) {
-      const room = rooms[r];
-      const capacity = room.kapasitas || 20;
+    if (distributeEvenly) {
+      // Distribute evenly across all rooms while respecting each room's capacity
+      const baseQuota = Math.floor(orderedStudents.length / rooms.length);
+      let remainder = orderedStudents.length % rooms.length;
+      const targetQuotas = rooms.map((_, idx) => {
+        const q = baseQuota + (idx < remainder ? 1 : 0);
+        return Math.min(q, roomCaps[idx]);
+      });
 
-      for (let seat = 1; seat <= capacity; seat++) {
-        if (studentIndex >= orderedStudents.length) break;
-
-        const std = orderedStudents[studentIndex];
-        const nomorPeserta = `${nomorPrefix}${String(studentIndex + 1).padStart(3, '0')}`;
-
-        allocations.push({
-          id: `alloc-${std.id}`,
-          studentId: std.id,
-          roomId: room.id,
-          nomorPeserta,
-          nomorMeja: seat,
-          isCardPrinted: false,
-        });
-
-        studentIndex++;
+      let sIdx = 0;
+      // First pass: fill up to balanced targetQuotas
+      for (let r = 0; r < rooms.length; r++) {
+        const take = targetQuotas[r];
+        for (let k = 0; k < take && sIdx < orderedStudents.length; k++) {
+          roomBuckets[r].push(orderedStudents[sIdx++]);
+        }
       }
 
-      if (studentIndex >= orderedStudents.length) break;
+      // Second pass: if some rooms were smaller capacity and students remain, fill remaining capacity
+      for (let r = 0; r < rooms.length && sIdx < orderedStudents.length; r++) {
+        while (roomBuckets[r].length < roomCaps[r] && sIdx < orderedStudents.length) {
+          roomBuckets[r].push(orderedStudents[sIdx++]);
+        }
+      }
+
+      // Third pass: if total students exceed total room capacity, distribute overflow evenly so ALL students still get seated
+      let overflowPtr = 0;
+      while (sIdx < orderedStudents.length) {
+        roomBuckets[overflowPtr % rooms.length].push(orderedStudents[sIdx++]);
+        overflowPtr++;
+      }
+    } else {
+      // Sequential fill room by room
+      let sIdx = 0;
+      for (let r = 0; r < rooms.length && sIdx < orderedStudents.length; r++) {
+        while (roomBuckets[r].length < roomCaps[r] && sIdx < orderedStudents.length) {
+          roomBuckets[r].push(orderedStudents[sIdx++]);
+        }
+      }
+      // Overflow fallback so no student is ever left out
+      let overflowPtr = 0;
+      while (sIdx < orderedStudents.length) {
+        roomBuckets[overflowPtr % rooms.length].push(orderedStudents[sIdx++]);
+        overflowPtr++;
+      }
     }
+
+    // 3. Assign Desk Numbers (1..15) and Seat Side ('Kiri' | 'Kanan') + Participant Number
+    const allocations: ExamAllocation[] = [];
+    let globalCounter = 1;
+
+    rooms.forEach((room, rIdx) => {
+      const perDesk = room.siswaPerMeja || 2;
+      const bucket = roomBuckets[rIdx];
+
+      bucket.forEach((std, posIdx) => {
+        const nomorPeserta = `${nomorPrefix}${String(globalCounter).padStart(3, '0')}`;
+        globalCounter++;
+
+        if (perDesk === 2) {
+          const nomorMeja = Math.floor(posIdx / 2) + 1;
+          const posisiKursi: 'Kiri' | 'Kanan' = posIdx % 2 === 0 ? 'Kiri' : 'Kanan';
+          allocations.push({
+            id: `alloc-${std.id}`,
+            studentId: std.id,
+            roomId: room.id,
+            nomorPeserta,
+            nomorMeja,
+            posisiKursi,
+            isCardPrinted: false,
+          });
+        } else {
+          allocations.push({
+            id: `alloc-${std.id}`,
+            studentId: std.id,
+            roomId: room.id,
+            nomorPeserta,
+            nomorMeja: posIdx + 1,
+            isCardPrinted: false,
+          });
+        }
+      });
+    });
 
     return allocations;
   },

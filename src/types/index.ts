@@ -123,15 +123,17 @@ export interface ExamInfo {
   tempatTanggalJadwal?: string; // e.g. "Tabir Selatan, 25 November 2026"
   ketuaPanitiaNama?: string; // e.g. "H. AHMAD RIFA'I, S.Pd.I."
   ketuaPanitiaNip?: string; // e.g. "198402122009011015"
+  ketuaPanitiaTtdUrl?: string; // Optional digital signature for Ketua Panitia Pelaksana Ujian
 }
 
 export interface ExamRoom {
   id: string;
   nomorRuang: string; // e.g. "Ruang 01", "Ruang 02"
-  namaRuang: string; // e.g. "Kelas 7A" or "Lab IPA"
-  kapasitas: number; // e.g. 20
+  namaRuang: string; // e.g. "Gedung A - Ruang 01"
+  kapasitas: number; // e.g. 30 (3 meja horizontal x 5 baris x 2 siswa/meja)
   barisMeja: number; // e.g. 5
-  kolomMeja: number; // e.g. 4
+  kolomMeja: number; // e.g. 3
+  siswaPerMeja?: number; // e.g. 2
   pengawas1: string;
   pengawas2: string;
 }
@@ -141,7 +143,8 @@ export interface ExamAllocation {
   studentId: string;
   roomId: string;
   nomorPeserta: string;
-  nomorMeja: number; // 1..kapasitas
+  nomorMeja: number; // 1..15 (desk number)
+  posisiKursi?: 'Kiri' | 'Kanan'; // 2 seats per desk
   isCardPrinted?: boolean;
 }
 

@@ -24,7 +24,14 @@ export const ExamAttendancePrint: React.FC<Props> = ({
 }) => {
   const roomAllocations = allocations
     .filter((a) => a.roomId === room.id)
-    .sort((a, b) => a.nomorMeja - b.nomorMeja);
+    .sort((a, b) => {
+      if (a.nomorMeja !== b.nomorMeja) return a.nomorMeja - b.nomorMeja;
+      if (a.posisiKursi === b.posisiKursi) return 0;
+      return a.posisiKursi === 'Kiri' ? -1 : 1;
+    });
+
+  const isDense = roomAllocations.length > 20;
+  const rowPy = isDense ? 'py-1' : 'py-1.5';
 
   const studentMap = new Map(students.map((s) => [s.id, s]));
 
@@ -126,28 +133,31 @@ export const ExamAttendancePrint: React.FC<Props> = ({
               roomAllocations.map((alloc, idx) => {
                 const std = studentMap.get(alloc.studentId);
                 const isOdd = idx % 2 === 0;
+                const deskText = alloc.posisiKursi
+                  ? `${String(alloc.nomorMeja).padStart(2, '0')} (${alloc.posisiKursi === 'Kiri' ? 'A' : 'B'})`
+                  : `${alloc.nomorMeja}`;
                 return (
                   <tr key={alloc.id} className="hover:bg-slate-50">
-                    <td className="py-1.5 px-2 text-center font-bold text-slate-700 border-r border-slate-200">
+                    <td className={`${rowPy} px-2 text-center font-bold text-slate-700 border-r border-slate-200`}>
                       {idx + 1}
                     </td>
-                    <td className="py-1.5 px-2 font-mono font-bold text-emerald-950 border-r border-slate-200 text-center">
+                    <td className={`${rowPy} px-2 font-mono font-bold text-emerald-950 border-r border-slate-200 text-center`}>
                       {alloc.nomorPeserta}
                     </td>
-                    <td className="py-1.5 px-2 font-mono text-[9.5px] border-r border-slate-200 text-center">
+                    <td className={`${rowPy} px-2 font-mono text-[9.5px] border-r border-slate-200 text-center`}>
                       {std ? `${std.nis} / ${std.nisn || '-'}` : '-'}
                     </td>
-                    <td className="py-1.5 px-3 font-bold text-slate-900 uppercase border-r border-slate-200 truncate max-w-[160px]">
+                    <td className={`${rowPy} px-3 font-bold text-slate-900 uppercase border-r border-slate-200 truncate max-w-[160px]`}>
                       {std?.nama || 'Siswa Dihapus'}
                     </td>
-                    <td className="py-1.5 px-2 text-center font-bold text-emerald-900 border-r border-slate-200">
+                    <td className={`${rowPy} px-2 text-center font-bold text-emerald-900 border-r border-slate-200`}>
                       {std?.kelas || '-'}
                     </td>
-                    <td className="py-1.5 px-2 text-center font-bold border-r border-slate-200">
-                      {alloc.nomorMeja}
+                    <td className={`${rowPy} px-2 text-center font-bold border-r border-slate-200 whitespace-nowrap`}>
+                      {deskText}
                     </td>
                     {/* Staggered Signature Columns */}
-                    <td className="py-1.5 px-2 border-r border-slate-200">
+                    <td className={`${rowPy} px-2 border-r border-slate-200`}>
                       <div className="flex items-center text-[9px] text-slate-400 font-medium">
                         {isOdd ? (
                           <span>{idx + 1}. ....................</span>
@@ -156,7 +166,7 @@ export const ExamAttendancePrint: React.FC<Props> = ({
                         )}
                       </div>
                     </td>
-                    <td className="py-1.5 px-2 text-center text-slate-400 text-[9px]">
+                    <td className={`${rowPy} px-2 text-center text-slate-400 text-[9px]`}>
                       [ &nbsp;&nbsp;&nbsp; ]
                     </td>
                   </tr>

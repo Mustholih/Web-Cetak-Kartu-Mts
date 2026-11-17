@@ -77,6 +77,32 @@ export const DEFAULT_STEMPEL_SVG = `data:image/svg+xml;utf8,${encodeURIComponent
 </svg>
 `)}`;
 
+// Official MTs Miftahul Huda Exam Committee Stamp SVG as Data URL
+export const DEFAULT_PANITIA_STEMPEL_SVG = `data:image/svg+xml;utf8,${encodeURIComponent(`
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" width="200" height="200">
+  <defs>
+    <path id="upperCirclePanitia" d="M 25,100 A 75,75 0 0,1 175,100" fill="none" />
+    <path id="lowerCirclePanitia" d="M 175,100 A 75,75 0 0,1 25,100" fill="none" />
+  </defs>
+  <circle cx="100" cy="100" r="92" fill="none" stroke="#1d4ed8" stroke-width="4" stroke-opacity="0.9"/>
+  <circle cx="100" cy="100" r="84" fill="none" stroke="#1d4ed8" stroke-width="1.5" stroke-opacity="0.9"/>
+  <circle cx="100" cy="100" r="54" fill="none" stroke="#1d4ed8" stroke-width="2" stroke-opacity="0.9"/>
+  <text font-family="'Plus Jakarta Sans', Arial, sans-serif" font-size="12" font-weight="bold" fill="#1d4ed8" letter-spacing="1.5">
+    <textPath href="#upperCirclePanitia" startOffset="50%" text-anchor="middle">
+      MTs MIFTAHUL HUDA
+    </textPath>
+  </text>
+  <text font-family="'Plus Jakarta Sans', Arial, sans-serif" font-size="10" font-weight="bold" fill="#1d4ed8" letter-spacing="2">
+    <textPath href="#lowerCirclePanitia" startOffset="50%" text-anchor="middle">
+      ★ MERANGIN - JAMBI ★
+    </textPath>
+  </text>
+  <polygon points="100,66 104,76 115,76 106,83 109,93 100,87 91,93 94,83 85,76 96,76" fill="#1d4ed8"/>
+  <text x="100" y="111" font-family="Arial, sans-serif" font-size="11" font-weight="900" fill="#1d4ed8" text-anchor="middle" letter-spacing="1">PANITIA</text>
+  <text x="100" y="124" font-family="Arial, sans-serif" font-size="9.5" font-weight="bold" fill="#1d4ed8" text-anchor="middle" letter-spacing="1">UJIAN</text>
+</svg>
+`)}`;
+
 // Authentic Headmaster Signature SVG as Data URL
 export const DEFAULT_TTD_SVG = `data:image/svg+xml;utf8,${encodeURIComponent(`
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 100" width="240" height="100">
@@ -455,42 +481,57 @@ export const DEFAULT_EXAM_ROOMS: ExamRoom[] = [
   {
     id: 'room-01',
     nomorRuang: 'Ruang 01',
-    namaRuang: 'Gedung A - Kelas 7A',
-    kapasitas: 20,
+    namaRuang: 'Gedung A - Ruang 01',
+    kapasitas: 30,
     barisMeja: 5,
-    kolomMeja: 4,
+    kolomMeja: 3,
+    siswaPerMeja: 2,
     pengawas1: 'Dra. Hj. Siti Aminah, M.Pd.',
     pengawas2: 'Ust. Muhammad Ilyas, S.Pd.I.',
   },
   {
     id: 'room-02',
     nomorRuang: 'Ruang 02',
-    namaRuang: 'Gedung A - Kelas 7B',
-    kapasitas: 20,
+    namaRuang: 'Gedung A - Ruang 02',
+    kapasitas: 30,
     barisMeja: 5,
-    kolomMeja: 4,
+    kolomMeja: 3,
+    siswaPerMeja: 2,
     pengawas1: 'Rahmat Hidayat, S.Pd.I.',
     pengawas2: 'Nurul Hidayati, S.Si.',
   },
   {
     id: 'room-03',
     nomorRuang: 'Ruang 03',
-    namaRuang: 'Gedung B - Kelas 8A',
-    kapasitas: 20,
+    namaRuang: 'Gedung B - Ruang 03',
+    kapasitas: 30,
     barisMeja: 5,
-    kolomMeja: 4,
+    kolomMeja: 3,
+    siswaPerMeja: 2,
     pengawas1: 'Zainuddin, S.Ag.',
     pengawas2: 'Fatmawati, S.Pd.',
   },
   {
     id: 'room-04',
     nomorRuang: 'Ruang 04',
-    namaRuang: 'Gedung B - Kelas 8B',
-    kapasitas: 20,
+    namaRuang: 'Gedung B - Ruang 04',
+    kapasitas: 30,
     barisMeja: 5,
-    kolomMeja: 4,
+    kolomMeja: 3,
+    siswaPerMeja: 2,
     pengawas1: 'Budi Santoso, S.Pd.',
     pengawas2: 'Laila Muniroh, S.Pd.I.',
+  },
+  {
+    id: 'room-05',
+    nomorRuang: 'Ruang 05',
+    namaRuang: 'Gedung C - Ruang 05',
+    kapasitas: 30,
+    barisMeja: 5,
+    kolomMeja: 3,
+    siswaPerMeja: 2,
+    pengawas1: 'Ahmad Ridwan, S.Pd.',
+    pengawas2: 'Siti Rahmawati, S.E.',
   },
 ];
 
@@ -500,77 +541,77 @@ export const DEFAULT_EXAM_SCHEDULE: ExamScheduleItem[] = [
     hariTanggal: 'Senin, 01 Des 2026',
     jam: '07.30 - 09.30',
     mataPelajaran: 'Al-Qur\'an Hadis',
-    roomSupervisors: { 'room-01': 'SA', 'room-02': 'RH', 'room-03': 'ZA', 'room-04': 'BS' },
+    roomSupervisors: { 'room-01': 'SA', 'room-02': 'RH', 'room-03': 'ZA', 'room-04': 'BS', 'room-05': 'AR' },
   },
   {
     id: 'sch-02',
     hariTanggal: 'Senin, 01 Des 2026',
     jam: '10.00 - 11.30',
     mataPelajaran: 'Akidah Akhlak',
-    roomSupervisors: { 'room-01': 'MI', 'room-02': 'NH', 'room-03': 'FW', 'room-04': 'LM' },
+    roomSupervisors: { 'room-01': 'MI', 'room-02': 'NH', 'room-03': 'FW', 'room-04': 'LM', 'room-05': 'SR' },
   },
   {
     id: 'sch-03',
     hariTanggal: 'Selasa, 02 Des 2026',
     jam: '07.30 - 09.30',
     mataPelajaran: 'Bahasa Indonesia',
-    roomSupervisors: { 'room-01': 'BS', 'room-02': 'AR', 'room-03': 'SR', 'room-04': 'MH' },
+    roomSupervisors: { 'room-01': 'BS', 'room-02': 'AR', 'room-03': 'SR', 'room-04': 'MH', 'room-05': 'KA' },
   },
   {
     id: 'sch-04',
     hariTanggal: 'Selasa, 02 Des 2026',
     jam: '10.00 - 11.30',
     mataPelajaran: 'Fikih',
-    roomSupervisors: { 'room-01': 'RH', 'room-02': 'SA', 'room-03': 'KA', 'room-04': 'ZA' },
+    roomSupervisors: { 'room-01': 'RH', 'room-02': 'SA', 'room-03': 'KA', 'room-04': 'ZA', 'room-05': 'MI' },
   },
   {
     id: 'sch-05',
     hariTanggal: 'Rabu, 03 Des 2026',
     jam: '07.30 - 09.30',
     mataPelajaran: 'Matematika',
-    roomSupervisors: { 'room-01': 'NH', 'room-02': 'FW', 'room-03': 'MI', 'room-04': 'BS' },
+    roomSupervisors: { 'room-01': 'NH', 'room-02': 'FW', 'room-03': 'MI', 'room-04': 'BS', 'room-05': 'LM' },
   },
   {
     id: 'sch-06',
     hariTanggal: 'Rabu, 03 Des 2026',
     jam: '10.00 - 11.30',
     mataPelajaran: 'Sejarah Kebudayaan Islam',
-    roomSupervisors: { 'room-01': 'ZA', 'room-02': 'LM', 'room-03': 'AR', 'room-04': 'SR' },
+    roomSupervisors: { 'room-01': 'ZA', 'room-02': 'LM', 'room-03': 'AR', 'room-04': 'SR', 'room-05': 'SA' },
   },
   {
     id: 'sch-07',
     hariTanggal: 'Kamis, 04 Des 2026',
     jam: '07.30 - 09.30',
     mataPelajaran: 'IPA Terpadu',
-    roomSupervisors: { 'room-01': 'FW', 'room-02': 'NH', 'room-03': 'MH', 'room-04': 'KA' },
+    roomSupervisors: { 'room-01': 'FW', 'room-02': 'NH', 'room-03': 'MH', 'room-04': 'KA', 'room-05': 'RH' },
   },
   {
     id: 'sch-08',
     hariTanggal: 'Kamis, 04 Des 2026',
     jam: '10.00 - 11.30',
     mataPelajaran: 'Bahasa Arab',
-    roomSupervisors: { 'room-01': 'LM', 'room-02': 'RH', 'room-03': 'SA', 'room-04': 'MI' },
+    roomSupervisors: { 'room-01': 'LM', 'room-02': 'RH', 'room-03': 'SA', 'room-04': 'MI', 'room-05': 'BS' },
   },
   {
     id: 'sch-09',
     hariTanggal: 'Jumat, 05 Des 2026',
     jam: '07.30 - 09.30',
     mataPelajaran: 'Bahasa Inggris',
-    roomSupervisors: { 'room-01': 'AR', 'room-02': 'BS', 'room-03': 'SR', 'room-04': 'ZA' },
+    roomSupervisors: { 'room-01': 'AR', 'room-02': 'BS', 'room-03': 'SR', 'room-04': 'ZA', 'room-05': 'FW' },
   },
   {
     id: 'sch-10',
     hariTanggal: 'Sabtu, 06 Des 2026',
     jam: '07.30 - 09.30',
     mataPelajaran: 'IPS Terpadu',
-    roomSupervisors: { 'room-01': 'SR', 'room-02': 'MH', 'room-03': 'FW', 'room-04': 'NH' },
+    roomSupervisors: { 'room-01': 'SR', 'room-02': 'MH', 'room-03': 'FW', 'room-04': 'NH', 'room-05': 'ZA' },
   },
   {
     id: 'sch-11',
     hariTanggal: 'Senin, 08 Des 2026',
     jam: '07.30 - 09.30',
     mataPelajaran: 'Pendidikan Pancasila',
-    roomSupervisors: { 'room-01': 'MH', 'room-02': 'KA', 'room-03': 'BS', 'room-04': 'LM' },
+    roomSupervisors: { 'room-01': 'MH', 'room-02': 'KA', 'room-03': 'BS', 'room-04': 'LM', 'room-05': 'NH' },
   },
 ];
 

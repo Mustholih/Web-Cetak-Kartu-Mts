@@ -45,28 +45,33 @@ export const PrintService = {
     pdf.save(filename.endsWith('.pdf') ? filename : `${filename}.pdf`);
   },
 
-  // Export Sheet with multiple pages to PDF (Supports A4: 210x297mm and F4/Folio: 215x330mm)
+  // Export Sheet with multiple pages to PDF (Supports A4 & F4 in Portrait or Landscape)
   async downloadSheetPdf(
     containerElement: HTMLElement,
     filename: string,
     paperSize: 'A4' | 'F4' = 'A4',
-    onProgress?: (current: number, total: number) => void
+    onProgress?: (current: number, total: number) => void,
+    orientation: 'portrait' | 'landscape' = 'portrait'
   ): Promise<void> {
     const pageElements = Array.from(
-      containerElement.querySelectorAll<HTMLElement>('.a4-sheet-page, .sheet-page')
+      containerElement.querySelectorAll<HTMLElement>(
+        '.a4-sheet-page, .f4-sheet-page, .a4-landscape-page, .f4-landscape-page, .sheet-page'
+      )
     );
     const targets = pageElements.length > 0 ? pageElements : [containerElement];
 
     const isF4 = paperSize === 'F4';
-    const pageWidthMm = isF4 ? 215 : 210;
-    const pageHeightMm = isF4 ? 330 : 297;
+    const formatArg: any = isF4 ? [215, 330] : 'a4';
 
     const pdf = new jsPDF({
-      orientation: 'portrait',
+      orientation,
       unit: 'mm',
-      format: isF4 ? [215, 330] : 'a4',
+      format: formatArg,
       compress: true,
     });
+
+    const pageWidthMm = pdf.internal.pageSize.getWidth();
+    const pageHeightMm = pdf.internal.pageSize.getHeight();
 
     for (let i = 0; i < targets.length; i++) {
       if (onProgress) {
@@ -83,7 +88,7 @@ export const PrintService = {
 
       const imgData = canvas.toDataURL('image/jpeg', 0.96);
       if (i > 0) {
-        pdf.addPage(isF4 ? [215, 330] : 'a4', 'portrait');
+        pdf.addPage(formatArg, orientation);
       }
       pdf.addImage(imgData, 'JPEG', 0, 0, pageWidthMm, pageHeightMm, undefined, 'FAST');
     }
@@ -98,6 +103,6 @@ export const PrintService = {
     filename: string,
     onProgress?: (current: number, total: number) => void
   ): Promise<void> {
-    return this.downloadSheetPdf(containerElement, filename, 'A4', onProgress);
+    return this.downloadSheetPdf(containerElement, filename, 'A4', onProgress, 'portrait');
   },
 };
